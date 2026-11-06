@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify and package revision 8; never connect to a keyboard."""
+"""Verify and package revision 9; never connect to a keyboard."""
 from pathlib import Path
 import hashlib
 import importlib.util
@@ -12,7 +12,7 @@ import tempfile
 from intelhex import IntelHex
 
 root = Path(__file__).resolve().parents[1]
-out = root / 'build/install/splash-heatmap-v1.5.0-r8'
+out = root / 'build/install/splash-heatmap-v1.5.0-r9'
 app = IntelHex(str(root / 'build/release/NeuronWireless_raise2.hex'))
 final_path = root / 'build/release/NeuronWireless_raise2_final.hex'
 final = IntelHex(str(final_path))
@@ -28,7 +28,7 @@ assert all(final[a] == app[a] for a in app.addresses())
 assert all(final[a] == rf[a] for a in rf.addresses())
 sp, reset = struct.unpack('<II', bytes(app.tobinarray(start=0x2E000, size=8)))
 assert 0x20009400 <= sp <= 0x20020000 and reset & 1 and 0x2E000 <= reset < 0x70000
-assert b'v1.5.0-splash8' in bytes(app.tobinarray())
+assert b'v1.5.0-splash9' in bytes(app.tobinarray())
 for removed in (b'splash.stats', b'splash.transport', b'splash.refresh'):
     assert removed not in bytes(app.tobinarray()), 'Removed diagnostic command remains in firmware'
 
@@ -37,7 +37,14 @@ def sha(path):
 
 baseline = json.loads((root / 'tests/splash/stock-baseline.json').read_text())
 for name, expected in baseline['critical_objects'].items():
+    if name == 'KeyboardManager.o':
+        continue  # Only its disconnect callback is allowed to change, checked below.
     assert sha(root / 'build/release/obj' / name) == expected, f'Stock object changed: {name}'
+spec = importlib.util.spec_from_file_location('verify_keyboard_manager', root / 'tests/splash/verify_keyboard_manager.py')
+manager_check = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(manager_check)
+manager_validation = manager_check.verify(root / 'build/release/obj/KeyboardManager.o')
+print(f"KeyboardManager: {manager_validation['stock_text_sections_identical']} stock text sections identical; only disconnect callback changed")
 with tempfile.TemporaryDirectory() as tmp:
     keymap = Path(tmp) / 'keymap.bin'
     subprocess.run(['arm-none-eabi-objcopy', '-O', 'binary', '--only-section=.rodata.keymaps_linear',
@@ -58,7 +65,9 @@ assert rgb_test and int(rgb_test.group(1)) >= 35, 'Actual RGB wire fade evidence
 hot_test = re.search(r'Actual repeated-tap RGB wire trace: (\d+) colors', tests_log)
 assert hot_test and int(hot_test.group(1)) >= 190, 'Repeated-tap wire fade evidence missing'
 assert 'Actual RP2040 scheduler/timers/Layer renderer: 33/36 LEDs' in tests_log
-assert 'Actual ComSide + stock connection callbacks: UNKNOWN scanner route with live key input reproduced' in tests_log
+assert 'Released side radio disconnect packets: valid CRC, no false wired disconnect, continuing keys and cached LED routing passed' in tests_log
+assert 'BLE cache ownership: old implementation fails the regression as expected' in tests_log
+assert 'Wired notification boundary: old implementation fails the regression as expected' in tests_log
 # Prepare all bytes only after image and stock-input/storage checks have passed.
 out.mkdir(parents=True, exist_ok=True)
 (out / 'keyscanner.bin').write_bytes(side)
@@ -74,14 +83,14 @@ manifest = {
     'source_commit': subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
     'submodules': {line.split()[1]:line.split()[0] for line in
         subprocess.check_output(['git', '-C', str(root), 'submodule', 'status', '--recursive'], text=True).splitlines()},
-    'custom_version': 'v1.5.0-splash8',
+    'custom_version': 'v1.5.0-splash9',
     'hardware_tested': False,
     'hardware_recovery_tested': False,
     'previous_revision_hardware_report': 'r5: left LEDs frozen, right active; live status shows left route UNKNOWN, 44065 queued frames unchanged, last frame about 12 minutes old despite newer left key packets.',
     'observed_neuron_route_failure_confirmed': True,
     'event_that_cleared_scanner_route_confirmed': False,
     'previous_revision_user_reported_working': 'v1.5.0-splash2',
-    'installation_recommendation': 'Fix candidate for observed stale scanner route: select LED destinations from the active communications transport. No periodic refresh or diagnostic counters. New Neuron image is not hardware-tested; side binary unchanged.',
+    'installation_recommendation': 'Fix candidate for observed stale scanner route: suppress relabeled radio disconnects at the wired receiver and preserve wired cache entries on BLE disconnect. Splash uses the normal scanner cache. No periodic refresh or diagnostic counters. New Neuron image is not hardware-tested; side binary unchanged.',
     'side_identical_to_revision_2': True,
     'palette_strategy': 'Per-frame adaptive RGB palette, up to 15 nonblack energy groups per half; no temporal dithering',
     'requires_patched_firmware_on_both_halves': True,
@@ -93,7 +102,8 @@ manifest = {
     'side_instruction_patches': [{'address':hex(a),'file_offset':hex(a-patcher.IMAGE_BIAS),
         'before':old.hex(),'after':new.hex()} for a,old,new in patcher.PATCHES],
     'files_sha256': hashes,
-    'stock_key_decoder_and_storage_objects_identical': baseline['critical_objects'],
+    'stock_key_decoder_and_storage_objects_identical': {k:v for k,v in baseline['critical_objects'].items() if k != 'KeyboardManager.o'},
+    'keyboard_manager_validation': manager_validation,
     'stock_default_keymap_sha256': baseline['default_keymap_sha256'],
     'validation': {
         'matrix_positions':80, 'emulated_map_updates':10000,
@@ -110,15 +120,17 @@ manifest = {
         'stale_pending_frame_timeout_ms':1000,
         'wake_mode_request_host_resume_and_one_sided_stall_tests':True,
         'actual_spi_fifo_overflow_and_retry_test':True,
-        'unknown_and_stale_scanner_route_regression':True,
-        'actual_comside_live_input_with_unknown_scanner_route_reproduced':True,
-        'wired_rf_ble_transport_selection_and_real_disconnect_tests':True,
+        'normal_scanner_cache_routing_restored':True,
+        'released_radio_disconnect_packets_preserve_wired_cache':True,
+        'ble_disconnect_preserves_distinct_wired_slot':True,
+        'genuine_disconnect_reconnect_and_key_release_both_halves':True,
+        'both_protections_fail_regression_with_old_code':True,
         'actual_rp2040_scheduler_timer_layer_renderer_test':True,
     },
     'neuron_flash_range': [hex(final.minaddr()), hex(final.maxaddr())],
     'source_sha256': {str(p.relative_to(root)):sha(p) for p in [
         root/'src/SplashHeatmap.h',root/'src/SplashHeatmapPlugin.cpp',root/'src/SplashHeatmapPlugin.h',
-        root/'src/mainDefy.cpp',root/'libraries/Spi_slave/SpiPort.cpp',root/'libraries/Communications/src/Communications.h',
+        root/'src/mainDefy.cpp',root/'libraries/Kaleidoscope/src/kaleidoscope/device/dygma/keyboardManager/KeyboardManager.cpp',root/'libraries/Spi_slave/SpiPort.cpp',root/'libraries/Communications/src/Communications.h',
         root/'libraries/Communications/src/device/neuron/defyN2/CommunicationsN2.cpp',
         root/'libraries/Communications/src/device/neuron/defyN2/CommunicationsN2_side.h',
         root/'libraries/Communications/src/device/neuron/common/Communications_side.cpp',

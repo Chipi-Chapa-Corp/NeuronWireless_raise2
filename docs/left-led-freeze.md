@@ -1,4 +1,4 @@
-# Left LED freeze: captured failure and route-selection fix
+# Left LED freeze: captured failure and notification fix
 
 On 2026-11-06 the user reported r5's left lighting frozen with the same keys dimly
 green/red while the right kept animating. The installed build included periodic
@@ -39,7 +39,7 @@ reads that list. `Hand` separately consumes HAS_KEYS packets, without requiring
 the list to contain a destination. Splash originally used the scanner list as
 its authoritative LED route.
 
-The actual `ComSide` state machine can remain connected while delivering a
+The stock `ComSide` state machine can remain connected while delivering a
 DISCONNECTED packet to application callbacks. Its connected-state packet handler
 forwards that notification without transitioning the transport state. A test
 executes that allowed sequence through the real ComSide/ComModel code and stock
@@ -94,10 +94,11 @@ function entry installed by the released initializer. It verifies these exact
 - Left: `03 01 00 51 ...` — DISCONNECTED, wired-left, no payload, valid CRC8.
 - Right: `03 02 00 ec ...` — DISCONNECTED, wired-right, no payload, valid CRC8.
 
-The generated left packet is then fed through the real Neuron ComSide and stock
-cache callbacks. The host test checks its CRC using the actual Neuron CRC8 code,
-observes the cache become UNKNOWN, and delivers ten subsequent key packets on
-the same still-connected transport.
+Before the fix, feeding these packets through the real Neuron ComSide and stock
+cache callbacks reproduced UNKNOWN with continuing input. Revision 9 replays both
+packets, checks their CRCs using the actual Neuron CRC8 code, and verifies that
+no false wired DISCONNECTED reaches application callbacks. The cached wired
+route remains valid and ten subsequent key packets arrive on each half.
 
 Both the untouched official side image and our map-patched image produce exactly
 the same packets. None of the map patch's instruction windows is involved. This
@@ -112,24 +113,44 @@ the secondary wireless connection to drop. That last attribution would require
 a connection-event capture spanning a recurrence. The r5 snapshots contained
 current state and counters, not a historical event log.
 
-## Revision 8
+## Revision 9: fix notification handling
 
-Communications now exposes the destination of its active connected transport.
-Splash uses that destination for left/right LED output, rather than the scanner's
-event-maintained list. The getter requires a real connected ComSide/model and
-returns UNKNOWN for a genuine disconnect. Wired and RF destinations are kept;
-BLE forwarding through the other half's bridge is supported.
+Revision 8 routed Splash directly through the active transport, bypassing the
+invalid cache. Revision 9 removes that workaround and its getter APIs. Splash
+uses the normal scanner cache again. Two source changes protect that cache:
 
+1. In the Neuron's ComSide connected-state receiver, a DISCONNECTED packet naming
+   the same live wired peer is suppressed before reaching global callbacks.
+   The released side forwards secondary radio disconnects under that wired ID;
+   the packet is not an authoritative wired transport-loss event. Actual cable
+   loss, an explicit local disconnect, or model-requested reconnect still uses
+   ComSide's local disconnect state, which emits the normal notification.
+   RF/BLE peer notifications retain their existing behavior.
+2. In Kaleidoscope's connection-cache owner, BLE disconnects clear the SPI slot
+   only if that slot holds that BLE device. Previously they cleared the slot
+   unconditionally, including when it held a distinct working wired connection.
+   BLE-host mode, which intentionally stores a BLE route in that slot, still
+   clears it correctly.
+
+This fixes notification handling for all callback consumers, including normal
+lighting and key-release logic. A false wired notice no longer releases held
+keys or triggers the global disconnect callbacks. A genuine loss still does.
 There is no new cache, periodic resend, diagnostic counter, or side-binary patch.
-Normal route changes still initialize the new half's LED configuration. The
-stock key decoder, matrix scan, keymap and EEPROM objects remain unchanged.
 
-Tests cover UNKNOWN and stale known scanner destinations while the live transport
-remains usable, real disconnect/reconnect, wired/RF/BLE selection, and continued
-LED frames. The new regression fails against the revision-7 sender and passes
-against revision 8. Existing animation, ownership, packet and side-instruction
-tests continue to pass.
+The regressions cover both halves, actual released packets, unrewritten BLE/RF
+notices, cable loss, explicit disconnect, model-requested reconnect, peer restart,
+and continued key delivery and cached LED routing. Compiling each old protection
+in turn makes the corresponding assertion fail. Animation, ownership, packet,
+FIFO and side-instruction tests also pass.
 
-The side image is identical to revisions 2–7. Revision 8's new Neuron build still
-needs hardware observation; passing the reproduced failure does not prove that
-all possible future LED failures are eliminated.
+The Kaleidoscope source difference is restricted to two conditional cache stores.
+All 80 matrix positions retain the stock decoder/scan behavior. The package
+requires Hand and EEPROM object hashes and the default keymap to match stock.
+KeyboardManager's 84 compiled text sections are checked individually: only the
+disconnect callback may change; the other 83 must remain byte-identical.
+
+The side image is identical to revisions 2–8. Revision 9 still needs physical
+observation; passing this specific reproduction does not prove that every possible
+future LED failure has been eliminated. The side's forwarding behavior remains
+in its released binary, but the Neuron no longer interprets that notification as
+a wired transport loss. No further binary patch is needed for this fix.

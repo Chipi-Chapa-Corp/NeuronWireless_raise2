@@ -1,10 +1,15 @@
-# Raise 2 Splash/Heatmap — revision 8
+# Raise 2 Splash/Heatmap — revision 9
 
-This fork is based on the exact `Raise2_v1.5.0` release. Revision 8 fixes the
-observed failure where the scanner's left LED route is UNKNOWN while left input
-continues. Splash now selects destinations from the active communications
-transport, rather than that separate event-maintained connection cache. It keeps
-revision 5's animation without diagnostic counters or periodic refresh.
+This fork is based on the exact `Raise2_v1.5.0` release. Revision 9 fixes the
+notification handling that can erase a live wired route after a wireless
+disconnect. The wired receiver suppresses a forwarded disconnect naming its own
+still-connected wired peer. BLE disconnect callbacks clear the SPI cache slot
+only when that slot actually contains the BLE route. Genuine transport losses
+still clear their routes through the local connection state machine.
+
+Splash uses the normal scanner connection cache again; revision 8's active-route
+bypass and its APIs have been removed. Revision 5's animation is retained without
+diagnostic counters or periodic refresh. The side binary is unchanged.
 
 The new Neuron image has passed software checks but has not been tested on the
 physical keyboard. Existing r5 status was read while the real fault was present;
@@ -44,11 +49,12 @@ One unavailable half does not block its peer.
 On 2026-11-06 the freeze recurred on r5 despite its periodic refresh. Captured
 status showed the left route was UNKNOWN and its queued-frame count had stopped
 for about 12 minutes, while newer left input packets arrived and the right kept
-updating. The refresh also skipped UNKNOWN routes. Revision 8 removes Splash's
-dependency on that stale cache; it does not change the side application or retry
-on a timer. The event that originally invalidated the cache has not been captured.
-The regression reproduces the stale-route state and distinguishes it from a
-real physical disconnect. Hardware confirmation of the new fix is still pending.
+updating. The refresh also skipped UNKNOWN routes. Tests execute the released
+side's radio disconnect handler and wired forwarding path: the wireless notice
+is relabeled as a wired disconnect despite the wired link staying connected.
+Revision 9 rejects that false wired lifecycle notification before application
+callbacks can invalidate the cache. The exact event preceding the physical
+incident was not captured; hardware confirmation of this fix is still pending.
 
 ## Build and install
 
@@ -69,11 +75,11 @@ The script runs input, animation, ownership, transport and side-instruction test
 then builds and verifies the installable package. Logs are in `build/verification`.
 Select this exact folder in Bazecor's custom firmware folder picker:
 
-    build/install/splash-heatmap-v1.5.0-r8
+    build/install/splash-heatmap-v1.5.0-r9
 
 It contains `Wireless_neuron.hex`, `keyscanner.bin`, `SHA256SUMS`, a manifest and
 this README. The Neuron is rebuilt from source. The side image is the SAME image
-as revisions 2 through 6; already patched halves do not require a different side
+as revisions 2 through 8; already patched halves do not require a different side
 image. Bazecor compares side application CRCs during its normal upgrade process.
 No automatic flashing is performed by the build scripts.
 
@@ -114,11 +120,15 @@ They are intentionally not published in Git.
 
 ## Verification limits
 
-Tests reproduce live key input with an UNKNOWN scanner route through the real
-ComSide state machine and stock connection callbacks. LED tests cover both
-UNKNOWN and stale known scanner routes, active wired/RF/BLE route selection and
-real disconnects. Tests also exercise all 80 stock matrix positions, unchanged keymap/storage object
-hashes, splash rings, fractional decay, RGB smoothness, per-layer isolation,
+Tests replay the released radio-disconnect packets through the real ComSide
+state machine and connection callbacks, verifying that wired routing and key
+input continue on both halves. BLE/RF notifications, genuine cable loss,
+reconnect, peer restart and key releases are covered. Each protection's regression
+fails with its original implementation. Tests also exercise all 80 stock matrix
+positions, unchanged Hand/EEPROM objects and default keymap. In KeyboardManager,
+only the compiled disconnect callback may differ: the other 83 text sections
+must match stock exactly. Tests cover splash rings, fractional decay, RGB
+smoothness, per-layer isolation,
 reconnects, restore, FIFO overflow/retry, and the absence of periodic idle writes.
 The release RP2040 map handlers execute 10,000 updates in Unicorn without vector
 growth. Its palette handler and mode setter receive the actual Neuron packet

@@ -25,7 +25,8 @@ assert main == git('show', 'Raise2_v1.5.0:src/mainDefy.cpp'), 'Unexpected stock 
 assert all(s.startswith(' ') for s in git('submodule', 'status', '--recursive').splitlines())
 pins = json.loads((root / 'tests/splash/upstream-pins.json').read_text())
 allowed = {
-    'libraries': {'Communications', 'Spi_slave/SpiPort.cpp', '.gitmodules'},
+    'libraries': {'Communications', 'Kaleidoscope', 'Spi_slave/SpiPort.cpp', '.gitmodules'},
+    'libraries/Kaleidoscope': {'src/kaleidoscope/device/dygma/keyboardManager/KeyboardManager.cpp'},
     'libraries/Communications': {'src/Communications.h',
         'src/device/neuron/defyN2/CommunicationsN2.cpp',
         'src/device/neuron/defyN2/CommunicationsN2_side.h',
@@ -52,6 +53,15 @@ subprocess.run([__import__('sys').executable, str(root / 'side-patches/tests/tes
 
 scanner = root / 'libraries/Kaleidoscope/src/kaleidoscope/device/dygma/keyboardManager'
 source = (scanner / 'KeyboardManager.cpp').read_text()
+# Only the two BLE disconnect stores may differ in the cache owner's source.
+stock_source = subprocess.check_output(['git', '-C', str(root / 'libraries/Kaleidoscope'),
+    'show', pins['libraries/Kaleidoscope'] + ':src/kaleidoscope/device/dygma/keyboardManager/KeyboardManager.cpp'], text=True)
+restored = source
+for hand, device in [('left', 'LEFT'), ('right', 'RIGHT')]:
+    guard = f'if ({hand}Connection[1] == BLE_DEFY_{device}) {hand}Connection[1] = UNKNOWN;'
+    assert restored.count(guard) == 1
+    restored = restored.replace(guard, f'{hand}Connection[1] = UNKNOWN;')
+assert restored == stock_source, 'Unexpected key scanner/cache source changes'
 start = source.index('void KeyboardKeyScanner::actOnMatrixScan()')
 opening = source.index('{', start)
 depth = 1
@@ -150,9 +160,6 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     subprocess.run([str(temp / 'plugin'), str(trace)], check=True)
     communication = root / 'libraries/Communications/src'
     transport_source = (communication / 'device/neuron/defyN2/CommunicationsN2.cpp').read_text()
-    begin = transport_source.index('Devices Communications::connectedSideDevice(')
-    end = transport_source.index('\nbool Communications::sendPacket(', begin)
-    (temp / 'actual_route.inc').write_text(transport_source[begin:end])
     begin = transport_source.index('bool Communications::sendPacket(Packet packet)')
     end = transport_source.index('\nbool Communications::sendPacketHostConnection', begin)
     (temp / 'actual_send.inc').write_text(transport_source[begin:end])
@@ -161,7 +168,7 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     callbacks_end = source.index('    Communications.callbacks.bind(DISCONNECTED, checkBrightness);', callbacks_start)
     (temp / 'actual_connection_callbacks.inc').write_text(source[callbacks_start:callbacks_end])
     begin = source.index('Communications_protocol::Devices KeyboardKeyScanner::leftHandDevice(')
-    end = source.index('\nCommunications_protocol::Devices KeyboardKeyScanner::rightHandDevice(', begin)
+    end = source.index('\nvoid KeyboardKeyScanner::usbConnectionsStateMachine()', begin)
     (temp / 'actual_connection_getter.inc').write_text(source[begin:end])
     common = communication / 'device/neuron/common'
     crc_source = (root / 'libraries/CRC/CRC_wrapper.cpp').read_text()
@@ -178,6 +185,26 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
         subprocess.run([__import__('sys').executable, str(root / 'tests/splash/side_disconnect.py'),
                         str(disconnect_packets)], check=True)
         subprocess.run([str(temp / 'route_state'), str(disconnect_packets)], check=True)
+    # Each protection independently catches a real regression in the old code.
+    import resource
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    def expect_regression(common_source, label, expected_assertion):
+        binary = temp / 'route_state_old'
+        subprocess.run(base_flags + ['-I' + str(root / 'tests/splash/stubs'),
+            '-I' + str(common), '-I' + str(communication), '-I' + str(temp),
+            str(root / 'tests/splash/route_state.cpp'), str(common_source),
+            str(common / 'Communication_model.cpp'), '-o', str(binary)], check=True)
+        result = subprocess.run([str(binary)], capture_output=True, text=True)
+        assert result.returncode != 0 and expected_assertion in result.stderr, (label, result.stderr)
+        print(label + ': old implementation fails the regression as expected')
+    previous_common = temp / 'ComSide-stock.cpp'
+    previous_common.write_text(subprocess.check_output(['git', '-C', str(root / 'libraries/Communications'),
+        'show', pins['libraries/Communications'] + ':src/device/neuron/common/Communications_side.cpp'], text=True))
+    expect_regression(previous_common, 'Wired notification boundary', 'getter()==wired && link.side.is_connected()')
+    (temp / 'actual_connection_callbacks.inc').write_text(stock_source[stock_source.index(
+        '    Communications.callbacks.bind(CONNECTED, ('):stock_source.index(
+        '    Communications.callbacks.bind(DISCONNECTED, checkBrightness);')])
+    expect_regression(common / 'Communications_side.cpp', 'BLE cache ownership', 'cache[0]==UNKNOWN && getter()==wired')
     subprocess.run(base_flags + ['-I' + str(communication), '-I' + str(temp),
         str(root / 'tests/splash/transport.cpp'), '-o', str(temp / 'transport')], check=True)
     subprocess.run([str(temp / 'transport')], check=True)

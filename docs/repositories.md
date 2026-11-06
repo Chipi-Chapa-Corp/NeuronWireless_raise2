@@ -16,11 +16,14 @@ Chipi-Chapa-Corp/
 ├── NeuronWirelessLibs          branch: raise2-v1.5.0-splash
 │   ├── Spi_slave/SpiPort.cpp   propagate FIFO enqueue failure
 │   ├── Communications/        submodule → DefyCommunications
+│   ├── Kaleidoscope/           submodule → Kaleidoscope-Dygma
 │   └── other dependencies     original upstream commits
 ├── DefyCommunications         branch: raise2-v1.5.0-splash
-│   ├── live transport route   select LEDs independently of stale scanner cache
+│   ├── notification handling  reject false wired disconnects while link is live
 │   ├── Neuron packet filter   prevent competing LED packets entering queues
 │   └── side map handlers      source correction matching the blob patch
+├── Kaleidoscope-Dygma         branch: raise2-v1.5.0-splash
+│   └── KeyboardManager.cpp    BLE disconnect only clears matching BLE cache slot
 └── raise2-side-patches         branch: main
     ├── tools/patch-side-led-maps.py
     ├── patches/raise2-v1.5.0.json
@@ -58,8 +61,8 @@ archives, logs, Python caches and SDK files are not added by this fork.
 
 ## Work across repositories
 
-Commit a Communications change first, then commit its new gitlink in the library
-fork, then commit the library gitlink in the main firmware fork. Patch changes
+Commit Communications and Kaleidoscope changes first, then commit their new
+gitlinks in the library fork, then commit the library gitlink in the main firmware fork. Patch changes
 are committed in `raise2-side-patches` and pinned directly by the main repository.
 This keeps changes attributable to their upstream source repositories and allows
 small upstream PRs later without mixing animation code into dependency fixes.
