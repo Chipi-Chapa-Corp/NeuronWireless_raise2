@@ -1,5 +1,8 @@
 # QMK-style heatmap — revision 15
 
+**Hardware result: rejected by the user.** Color stepping, press-to-light latency
+and subtle red were reported worse. See [the investigation and limits](r15-user-regressions.md).
+
 The requested reference is QMK's Typing Heatmap, demonstrated on a Keyball in
 https://www.youtube.com/shorts/hIqxDwHeHTI and described by its author at
 https://note.com/co_ke/n/nf89d0de0d718.
@@ -73,6 +76,5 @@ image is byte-identical to ordinary r2–r14. No new blob patch is included.
   allowed in KeyboardManager.
 
 These checks do not measure emitted light or establish that the earlier physical
-red tint is gone. The new Neuron image has not been observed on the keyboard.
-Select `build/install/splash-heatmap-v1.5.0-r15` in Bazecor's custom firmware
-picker after backing up the current input profile. Packaging never flashes.
+red tint is gone. The user subsequently tested r15 and reported worse results; it is not a
+recommended installation. The retained package is `build/install/splash-heatmap-v1.5.0-r15`. Packaging never flashes.

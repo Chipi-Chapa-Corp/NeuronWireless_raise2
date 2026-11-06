@@ -1,5 +1,9 @@
 # Raise 2 Splash/Heatmap — revision 15
 
+**r15 is not recommended:** the user reports worse steps, latency and red tint.
+See [the investigation](r15-user-regressions.md). Software results below are not
+hardware acceptance. Earlier packages remain available for rollback.
+
 This fork is based on the exact `Raise2_v1.5.0` release. Revision 15 adapts
 QMK Typing Heatmap's default heating, linear cooling and HSV color mapping.
 A single press starts blue; continued typing adds heat through cyan, green,
@@ -19,8 +23,8 @@ cannot erase a live wired route. Splash uses the normal scanner connection cache
 revision 8's bypass APIs remain removed. There are no diagnostic counters,
 periodic refreshes, temporal dithering, or additional side binary changes.
 
-The new Neuron image has passed software checks but has not been tested on the
-physical keyboard. Existing r5 status was read while the real fault was present;
+The Neuron image passed software checks but was subsequently rejected in
+physical testing for worse lighting behavior. Existing r5 status was read while the real fault was present;
 no LED commands, resets or flashing were performed. See [the captured evidence
 and regression tests](left-led-freeze.md).
 

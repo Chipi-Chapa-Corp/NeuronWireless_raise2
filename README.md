@@ -1,5 +1,9 @@
 # Raise 2 Splash/Heatmap firmware
 
+**r15 was rejected in hardware testing** for worse color stepping, noticeable
+latency and more red tint. Its earlier software checks do not establish a good
+physical result. See [the regression investigation](docs/r15-user-regressions.md).
+
 Custom Neuron firmware based on **Dygma Raise 2 1.5.0**, with additive splash
 rings, smooth adaptive RGB fading and exclusive LED ownership across layer changes.
 Revision 15 uses QMK Typing Heatmap's cooling and HSV mapping: blue at low
