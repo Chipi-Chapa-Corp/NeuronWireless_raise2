@@ -1,4 +1,7 @@
 [submodule "libraries"]
 	path = libraries
-	url = git@github.com:Dygmalab/NeuronWirelessLibs.git
-	branch = main
+	url = https://github.com/Chipi-Chapa-Corp/NeuronWirelessLibs.git
+	branch = raise2-v1.5.0-splash
+[submodule "side-patches"]
+	path = side-patches
+	url = https://github.com/Chipi-Chapa-Corp/raise2-side-patches.git

@@ -1,0 +1,13 @@
+{
+  "base_tag": "Raise2_v1.5.0",
+  "compiler": "GNU Arm Embedded 10.3-2021.10",
+  "critical_objects": {
+    "Hand.o": "b153addf3437c99d2ef9d015fa0893b5279628acdf0be8bf9fda20ee7fac44b9",
+    "KeyboardManager.o": "6cc5e4aa664a1660b8dc063e7794a9116617f4f73e735bfe8125cb1c4a0a9021",
+    "EEPROM.o": "f5b3c3242f72876c2cb4d482c0c84b85a131700b9bdb97d597b686bc5224cf2d",
+    "EEPROM-Settings.o": "7bc436a1ef471d2c35e63b6e8ddc4b54bf477259e7f0fc4b0a5ce985d181282a",
+    "EEPROM-Keymap.o": "9eeed7ade1d4895205a74e27132134cbe896f17a8998ff61ba0b06e6b2439e2a"
+  },
+  "default_keymap_size": 320,
+  "default_keymap_sha256": "b49c97de81b6d4141ff4676d65ff43539d9dca1cd7e57af637aed9588e785c9a"
+}

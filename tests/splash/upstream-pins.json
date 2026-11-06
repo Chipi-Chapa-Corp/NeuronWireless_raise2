@@ -1,0 +1,12 @@
+{
+  "libraries": "ef1b694194ee4ed350e74e75ab3e33b2017f026d",
+  "libraries/Arduino": "56f19f009cf70626a1b6d1ff60b38939101b88ff",
+  "libraries/Arduino/libraries/Adafruit_TinyUSB_Arduino": "492de6fd902d850b9440ccbd56836c9c8b78c276",
+  "libraries/Ble_composite_dev": "01ea9aba4c13bea9608f2b2acc0683850249f431",
+  "libraries/Communications": "bd2d9b0f94764b793dd5e9f46671c403ccbdec02",
+  "libraries/Kaleidoscope": "cb2059acd7551b712bdab8d0450ff3e99fe3aaec",
+  "libraries/NeuronLedLibrary": "d81eb705d01ffc0c7f3b3b85b0cc1453850c79cb",
+  "libraries/NeuronLedLibrary/LedModeSerializable": "2ba2c6c81a0a50a2db357aa0a0cb92d96dce9cef",
+  "libraries/UpgradeKeyscanner": "c6af0e86c28c59ee8061fa55f5dbd284c51723d1",
+  "libraries/rf_host_device/rf_host_device": "983721e1e6842bf4b51d4a8786db109f493c2fa5"
+}

@@ -90,6 +90,7 @@ extern "C"
 #include "LEDEffect-Rainbow-Defy.h"
 #include "LEDEffect-SolidColor-Defy.h"
 #include "LEDEffect-Stalker-Defy.h"
+#include "SplashHeatmapPlugin.h"
 
 
 #include "Battery.h"
@@ -361,7 +362,7 @@ KALEIDOSCOPE_INIT_PLUGINS
     /*SideFlash,*/ Focus, MouseKeys, OneShot, LayerFocus,
     HostPowerManagement,Battery,
     /*BLE*/
-    RadioManager, _BleManager
+    RadioManager, _BleManager, SplashHeatmapLED
 );
 // clang-format on
 // End Kaleidoscope

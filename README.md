@@ -1,20 +1,23 @@
-# NeuronWireless_raise2
-nRF MCU family version for the Neuron Platform
+# Raise 2 Splash/Heatmap firmware
 
-## Cloning the Repository with Submodules
-To get a full copy of the repository, including all submodules:
+Custom Neuron firmware based on **Dygma Raise 2 1.5.0**, with additive splash
+rings, smooth adaptive RGB fading and exclusive LED ownership across layer changes.
+Revision 7 keeps the revision-5 animation with periodic refresh and diagnostic
+telemetry removed. The side application still needs the existing allocation patch;
+it is not rebuilt from source.
 
-1. Clone the repository:
-
-```bash
-git clone git@github.com:Dygmalab/NRF-Neuron.git
-```
-
-2. Navigate to the cloned directory and update the submodules:
+- [Build, install, enable and rollback](docs/splash-heatmap.md)
+- [Four repositories and pinned submodules](docs/repositories.md)
+- [Side patch source and exact metadata](side-patches/README.md)
 
 ```bash
-cd NRF-Neuron && git submodule update --init --recursive
+git -c url.https://github.com/.insteadOf=git@github.com: clone   --branch raise2-v1.5.0-splash --recurse-submodules   https://github.com/Chipi-Chapa-Corp/NeuronWireless_raise2.git
 ```
+
+The main custom build command is `bash build/build-local.sh`. It runs software
+checks and creates `build/install/splash-heatmap-v1.5.0-r7`; it never flashes.
+New Neuron builds still need hardware validation. The following upstream notes
+cover the target and external SDK/toolchain prerequisites.
 
 ## Target device
 NeuronWireless_raise2 is built to be loaded into the Nordic Semiconductor nRF52833 microcontroller.

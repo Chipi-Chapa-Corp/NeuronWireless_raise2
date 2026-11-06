@@ -45,3 +45,7 @@
 cmake-build-debug/
 compile_commands.json
 
+
+# Local Python caches and workstation-only build history
+__pycache__/
+*.pyc
