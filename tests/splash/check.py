@@ -50,6 +50,8 @@ for line in git('submodule', 'status', '--recursive').splitlines():
     assert all(row[3:] in allowed.get(path, set()) for row in changed.splitlines()), (path, changed)
 subprocess.run([__import__('sys').executable, str(root / 'side-patches/tests/test_patch.py'),
                 str(root / 'build/vendor/keyscanner-v1.5.0.bin')], check=True)
+subprocess.run([__import__('sys').executable, str(root / 'side-patches/tests/test_deghost.py'),
+                str(root / 'build/vendor/keyscanner-v1.5.0.bin')], check=True)
 
 scanner = root / 'libraries/Kaleidoscope/src/kaleidoscope/device/dygma/keyboardManager'
 source = (scanner / 'KeyboardManager.cpp').read_text()
@@ -254,6 +256,7 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
         side.check(stock, patched)
         subprocess.run([__import__('sys').executable, str(root / 'tests/splash/side_scheduler.py')], check=True)
         subprocess.run([__import__('sys').executable, str(root / 'tests/splash/color_transfer.py'), str(fade_trace)], check=True)
+        subprocess.run([__import__('sys').executable, str(root / 'tests/splash/side_driver.py')], check=True)
         receivers = [side.Receiver(patched), side.Receiver(patched)]
         packets = trace.read_bytes()
         colors = [set(), set()]

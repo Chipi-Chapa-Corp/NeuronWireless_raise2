@@ -96,3 +96,9 @@ investigation, but does not identify hardware, channel calibration or another
 specific cause. The final green levels (7, 6, 4, 3, 1) supply R=0, B=0 and W=0, and all channels
 reach zero at black in the renderer replay. No speculative global color-balance
 change is included in r12, and the reported physical tint remains unresolved.
+
+Further tests now extend through the released PWM packer and output queue.
+A separately selected anti-ghost experiment changes one documented driver
+setting, while the ordinary r12 side image remains unchanged. See
+[the tail/driver investigation](tail-driver-investigation.md) for measured
+limits, exact patch details and the still-unconfirmed physical cause.

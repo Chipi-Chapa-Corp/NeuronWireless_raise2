@@ -10,6 +10,7 @@ or diagnostic telemetry. The side application still needs the existing allocatio
 it is not rebuilt from source.
 
 - [Build, install, enable and rollback](docs/splash-heatmap.md)
+- [End-of-fade driver investigation and optional anti-ghost test](docs/tail-driver-investigation.md)
 - [Fade stepping: cause, renderer tests and limits](docs/fade-stepping.md)
 - [Changed key actions: missing profile after update](docs/input-profile-loss.md)
 - [Left LED freeze: evidence and notification fix](docs/left-led-freeze.md)
