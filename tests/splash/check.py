@@ -159,6 +159,17 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
                     str(root / 'tests/splash/model.cpp'), '-o', str(temp / 'model')], check=True)
     fade_trace = temp / 'fade.bin'
     subprocess.run([str(temp / 'model'), str(fade_trace)], check=True)
+    jitter_flags = ['g++', '-std=c++11', '-fsanitize=address,undefined', '-g',
+                    '-I' + str(temp), '-I' + str(root / 'libraries/Communications/src')]
+    subprocess.run(jitter_flags + ['-I' + str(root / 'src'),
+        str(root / 'tests/splash/jitter.cpp'), '-o', str(temp / 'jitter')], check=True)
+    subprocess.run([str(temp / 'jitter')], check=True)
+    legacy = temp / 'legacy'
+    legacy.mkdir()
+    (legacy / 'SplashHeatmap.h').write_text(git('show', 'ec208d9:src/SplashHeatmap.h'))
+    subprocess.run(jitter_flags + ['-I' + str(legacy), '-I' + str(root / 'src'),
+        str(root / 'tests/splash/jitter.cpp'), '-o', str(temp / 'legacy_jitter')], check=True)
+    subprocess.run([str(temp / 'legacy_jitter'), '--expect-jitter'], check=True)
     subprocess.run(flags + ['-include', str(root / 'tests/splash/stubs/host.h'),
                     '-I' + str(root / 'src'),
                     '-I' + str(root / 'libraries/NeuronLedLibrary/LedModeSerializable/src'),

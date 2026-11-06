@@ -11,11 +11,12 @@
 class SplashHeatmap {
  public:
   enum { rows = 5, cols = 8, no_led = 255, max_leds = 36, frame_ms = 20,
-         tap_boost = 48, decay_ms = 10, tail_hold_ms = 250 };
+         tap_boost = 48, decay_ms = 10, tail_hold_ms = 50 };
 
   void reset(uint32_t now) {
     memset(heat_, 0, sizeof(heat_));
     memset(tail_ticks_, 0, sizeof(tail_ticks_));
+    memset(groups_valid_, 0, sizeof(groups_valid_));
     last_decay_ = now;
   }
 
@@ -30,7 +31,7 @@ class SplashHeatmap {
         for (uint32_t i = 0; i < steps && value; ++i) {
           if (value <= 16 * 256 + 127) {
             // Below 16/255, hold each distinct post-gamma color for the same
-            // 250 ms. Counting raw RGB units would give unequal visible holds.
+            // 50 ms. Counting raw RGB units would give unequal visible holds.
             if (++tail_ticks >= tail_hold_ms / decay_ms) {
               value = previous_tail_energy(value);
               tail_ticks = 0;
@@ -53,6 +54,7 @@ class SplashHeatmap {
     uint8_t col = side ? 15 - column : column;
     if (led(side, row, col) == no_led) return;
     tick(now);
+    groups_valid_[side] = false;
     // Expand across the half, halving the injected energy at every ring.
     // Thumb keys occupy a separate lower row in the layout despite sharing
     // electrical row 4, so use that visual row when measuring their distance.
@@ -124,9 +126,13 @@ class SplashHeatmap {
     rgba[2] = rgba[3] = 0;
   }
 
-  void make_frame(uint8_t side, uint8_t count, Frame &output) const {
+  void make_frame(uint8_t side, uint8_t count, Frame &output) {
     memset(&output, 0, sizeof(output));
     if (side >= 2 || count > max_leds) return;
+    if (groups_valid_[side] && group_led_count_[side] == count) {
+      render_groups(side, count, output);
+      return;
+    }
     uint16_t centers[max_leds]{};
     uint8_t weights[max_leds]{};
     uint8_t clusters = 0;
@@ -144,7 +150,9 @@ class SplashHeatmap {
     }
     // A single splash has at most eight distinct ring energies, so every RGB
     // shade is exact. For busy overlapping splashes, merge nearest energies
-    // until the side's 15 nonblack palette slots suffice. No temporal dithering.
+    // until the side's 15 nonblack palette slots suffice. Group membership is
+    // retained until new heat arrives: regrouping on every decay frame can make
+    // a declining key's represented energy rise. No temporal dithering.
     while (clusters > 15) {
       uint8_t at = 0;
       uint16_t gap = 65535;
@@ -161,7 +169,6 @@ class SplashHeatmap {
       }
       --clusters;
     }
-    for (uint8_t j = 0; j < clusters; ++j) color_energy(centers[j], output.palette[j + 1]);
     for (uint8_t i = 0; i < count; ++i) {
       uint16_t heat = energy(side, i);
       if (heat < 128) continue;
@@ -173,6 +180,11 @@ class SplashHeatmap {
       }
       output.indices[i] = best;
     }
+    memcpy(group_indices_[side], output.indices, count);
+    group_count_[side] = clusters;
+    group_led_count_[side] = count;
+    groups_valid_[side] = true;
+    render_groups(side, count, output);
   }
 
   static Communications_protocol::Packet palette_packet(
@@ -206,6 +218,22 @@ class SplashHeatmap {
   }
 
  private:
+  void render_groups(uint8_t side, uint8_t count, Frame &output) const {
+    uint32_t sums[16]{};
+    uint8_t weights[16]{};
+    memcpy(output.indices, group_indices_[side], count);
+    for (uint8_t i = 0; i < count; ++i) {
+      uint8_t group = group_indices_[side][i];
+      sums[group] += energy(side, i);
+      ++weights[group];
+    }
+    for (uint8_t group = 1; group <= group_count_[side]; ++group) {
+      // Keep zero-energy members in the denominator. Dropping a finished key
+      // could otherwise brighten its group's remaining keys during a fade.
+      if (weights[group]) color_energy(sums[group] / weights[group], output.palette[group]);
+    }
+  }
+
   static uint16_t previous_tail_energy(uint16_t heat) {
     uint8_t current[4], next[4];
     color_energy(heat, current);
@@ -218,6 +246,9 @@ class SplashHeatmap {
     return 0;
   }
 
+  bool groups_valid_[2] = {};
+  uint8_t group_indices_[2][max_leds] = {};
+  uint8_t group_count_[2] = {}, group_led_count_[2] = {};
   uint8_t tail_ticks_[2][max_leds] = {};
   uint16_t heat_[2][max_leds] = {};
   uint32_t last_decay_ = 0;

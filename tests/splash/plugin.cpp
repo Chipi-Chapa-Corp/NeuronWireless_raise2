@@ -158,11 +158,11 @@ int main(int argc,char **argv) {
   for(size_t i=0;i+1<color_runs.size();++i) {
     if(color_runs[i].second>0 && color_runs[i].second<=7) {
       unsigned duration=color_runs[i+1].first-color_runs[i].first;
-      assert(duration>=220 && duration<=280);++holds;
+      assert(duration>=20 && duration<=80);++holds;
     }
   }
   assert(holds==5);
-  std::cout<<"Actual plugin dim-tail packet timing: five equal holds within 250 +/- 30 ms\n";
+  std::cout<<"Actual plugin dim-tail packet timing: five equal holds within 50 +/- 30 ms\n";
   assert(colors.size()>=30);
   std::cout<<"Actual plugin post-gamma RGB trace: "<<colors.size()<<" distinct single-tap colors, monotone fade, <=3/255 channel steps\n";
 

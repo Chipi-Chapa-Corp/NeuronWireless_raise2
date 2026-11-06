@@ -27,6 +27,8 @@ for scenario in range(3):
     side = ScheduledReceiver(image, 33)
     colors = set()
     runs = []
+    previous = None
+    green_falling = [False] * 33
     for n in range(851):
         offset = (scenario * 851 + n) * stride
         frame, expected = trace[offset:offset+100], trace[offset+100:offset+stride]
@@ -38,6 +40,15 @@ for scenario in range(3):
         side.poll(n * 20 + 10)
         actual = side.flushes[-1][1]
         assert actual == expected, (scenario, n, actual, expected)
+        if previous is not None:
+            for led in range(33):
+                at = led * 4
+                assert actual[at] <= previous[at], ('red rebound', scenario, n, led)
+                if actual[at+1] < previous[at+1]:
+                    green_falling[led] = True
+                if green_falling[led]:
+                    assert actual[at+1] <= previous[at+1], ('green rebound', scenario, n, led)
+        previous = actual
         rgb = tuple(actual[8*4:8*4+4])
         colors.add(rgb)
         if not runs or runs[-1][1] != rgb:
@@ -53,7 +64,7 @@ for scenario in range(3):
         assert len(colors) >= (30 if scenario == 0 else 160)
         tail_holds = [runs[i+1][0] - time for i, (time, rgb) in enumerate(runs[:-1])
                       if rgb[0] == 0 and 0 < rgb[1] <= 7]
-        assert len(tail_holds) == 5 and all(240 <= hold <= 260 for hold in tail_holds), tail_holds
+        assert len(tail_holds) == 5 and all(40 <= hold <= 60 for hold in tail_holds), tail_holds
         print(f'Actual RP2040 {"single-tap" if scenario == 0 else "saturated"} fade: {len(colors)} output colors; dim tail holds {min(tail_holds)}-{max(tail_holds)} ms; final black')
     else:
-        print('Actual RP2040 overlapping-splash fade: every key matches post-gamma RGB, no red tail, final black')
+        print('Actual RP2040 overlapping-splash fade: every key matches post-gamma RGB, no brightness reversals or red tail, final black')

@@ -1,4 +1,4 @@
-# Fade correction and equal holds: revision 11
+# Fade correction, faster holds and stable groups: revision 12
 
 The user reported roughly one-second dim-color batches and a shallow red tail
 on a build preceding r9. Revision 9 changed notification handling only; it did
@@ -35,13 +35,33 @@ to zero. The build verifies the generated header; it never modifies the side.
 
 At ordinary energy the existing decay law is unchanged. Revision 10 used a
 linear tail, which reduced the final holds to alternating 160/320 ms intervals.
-Revision 11 instead holds each distinct realizable dim color for 250 ms, skipping
+Revision 11 introduced equal 250 ms holds. Revision 12 reduces them to 50 ms, skipping
 raw RGB values that produce the same output. This begins below about 16/255.
 Each key has its own hold phase; a new tap adds heat and restarts the affected
 hold. Tap energy, splash rings, frame pacing and brightness configuration stay
 the same.
 This makes low-energy taps brighter: their brightness is no longer unintentionally
 crushed by another gamma conversion.
+
+## Brightness reversals from palette regrouping
+
+The user subsequently reported brief higher/lower/higher brightness during a
+fade. This was reproduced without any new keypresses: per-frame nearest-energy
+regrouping changed a declining key's represented color upward. Twenty seeded
+histories produced 113 post-gamma brightening reversals in revision 11.
+
+Revision 12 builds groups after each new press, then preserves their membership
+while energy decays. Every frame uses each group's mean current energy. Finished
+members stay in its denominator, so their removal cannot brighten the others.
+The same rule is used on the first frame, avoiding a jump from a merge center
+to a different mean on the following frame. New input rebuilds only its own half.
+
+`tests/splash/jitter.cpp` checks 230,340 cold-fade key samples across those
+histories. The new implementation has no brightening reversals; compiling the
+original header reproduces them. The released renderer replay also verifies
+nonincreasing red and a single rise/fall of green across complete no-input fades.
+A green increase during the initial red-to-green cooling phase is intentional;
+a later rebound after green begins falling is rejected.
 
 ## Verification and limits
 
@@ -52,9 +72,9 @@ outputs after gamma. The actual Neuron plugin's packet stream is separately
 checked using the oracle verified by that execution.
 
 The corrected isolated fade has **32 output colors** including black; the
-saturated fade has **169**. The final green levels **7, 6, 4, 3, 1** each hold for **250 ms** on the model's
-10 ms clock. Replaying at 50 fps measures **240–260 ms** holds; the actual
-Neuron plugin packet trace must remain within 250 +/- 30 ms. New taps interrupt
+saturated fade has **169**. The final green levels **7, 6, 4, 3, 1** each hold for **50 ms** on the model's
+10 ms clock. Replaying at 50 fps measures **40–60 ms** holds; the actual
+Neuron plugin packet trace must remain within 50 +/- 30 ms. New taps interrupt
 the fade, and busy palette clustering can merge nearby levels. There are no new periodic refreshes,
 diagnostics, temporal dithering or side instruction patches. Input and storage
 baseline checks and r9's notification regressions remain required.
@@ -69,3 +89,10 @@ to black. The corrected isolated, saturated and overlapping renderer tests also
 show no nearly-black red tail, but this does not establish the cause of the
 physical report. Hardware confirmation is still needed; the gamma result alone
 must not be presented as a proven explanation for the red tail.
+
+The user also sees a reddish tint while Bazecor's pure white is steadily lit.
+That observation makes the shared color-conversion/LED path a candidate for
+investigation, but does not identify hardware, channel calibration or another
+specific cause. The dim Splash tail supplies R=0, B=0 and W=0, and all channels
+reach zero at black in the renderer replay. No speculative global color-balance
+change is included in r12, and the reported physical tint remains unresolved.

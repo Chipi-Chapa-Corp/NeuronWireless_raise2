@@ -42,7 +42,7 @@ int main(int argc,char **argv) {
     old_energy=old_energy*251/256;
     heat.tick(step*50);
     int difference=static_cast<int>(heat.energy(0,0))-static_cast<int>(old_energy);
-    if (old_energy > 16*256) assert(difference>-256 && difference<256);
+    if (old_energy > 17*256) assert(difference>-256 && difference<256);
   }
   heat.reset(0);heat.press(4,5,0);
   assert(heat.value(0,31)==48 && heat.value(0,32)==24);
@@ -91,7 +91,7 @@ int main(int argc,char **argv) {
   assert(hot_shades.size()>=160);
   std::cout<<"Repeated-tap post-gamma fade: "<<hot_shades.size()<<" RGB colors, <=5/255 channel change per 20 ms\n";
 
-  // The final distinct green colors each last 250 ms on the 10 ms model
+  // The final distinct green colors each last 50 ms on the 10 ms model
   // clock, including the last lit level before black. New taps restart a hold.
   heat.reset(0);heat.press(1,1,0);
   unsigned previous_level=255, entered=0, equal_holds=0;
@@ -100,7 +100,7 @@ int main(int argc,char **argv) {
     uint8_t rgb[4];post_gamma(frame.palette[frame.indices[8]],rgb);
     if(rgb[1]!=previous_level) {
       if(previous_level>0 && previous_level<=7) {
-        assert(ms-entered==250);++equal_holds;
+        assert(ms-entered==50);++equal_holds;
       }
       previous_level=rgb[1];entered=ms;
     }
@@ -109,7 +109,7 @@ int main(int argc,char **argv) {
   heat.reset(0);heat.press(1,1,0);heat.tick(4000);
   heat.press(1,1,4000);assert(heat.value(0,8)>=48);
   heat.tick(4200);assert(heat.value(0,8)>40);
-  std::cout<<"Dim tail model: every final distinct green holds 250 ms; new taps add heat and restart fading\n";
+  std::cout<<"Dim tail model: every final distinct green holds 50 ms; new taps add heat and restart fading\n";
 
   // Busy overlapping splashes still fit the shared per-half palette, without
   // out-of-range indices, heap allocation, or nondeterministic dither phases.

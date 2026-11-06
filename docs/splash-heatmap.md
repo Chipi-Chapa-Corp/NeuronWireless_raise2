@@ -1,12 +1,15 @@
-# Raise 2 Splash/Heatmap — revision 11
+# Raise 2 Splash/Heatmap — revision 12
 
-This fork is based on the exact `Raise2_v1.5.0` release. Revision 11 holds each
-distinct dim-tail color for **250 ms**, then steps to the next dimmer realizable
-color. At the 50 fps test cadence these transitions appear 240–260 ms apart.
+This fork is based on the exact `Raise2_v1.5.0` release. Revision 12 holds each
+distinct dim-tail color for **50 ms**, then steps to the next dimmer realizable
+color. At the 50 fps test cadence these transitions appear 40–60 ms apart.
 New taps add heat and restart the affected holds. The earlier exponential fade
 and revision 10's compensation for the side gamma table/channel gains remain.
 Low-energy taps are brighter than revisions 5–9; global brightness is unchanged.
-See [the fade investigation and limits](fade-stepping.md).
+Palette membership stays fixed between new keypresses. Its colors follow the
+falling mean energy of each group, including keys that have reached zero. This
+prevents regrouping from briefly brightening fading keys. A new keypress rebuilds
+only that half's groups. See [the fade investigation and limits](fade-stepping.md).
 
 Revision 9's notification fixes are retained: forwarded wireless disconnects
 cannot erase a live wired route. Splash uses the normal scanner connection cache;
@@ -25,13 +28,15 @@ and regression tests](left-led-freeze.md).
   and so on in fractional precision. Diagonal neighbors are included. Splash
   stays within each half; thumb keys use an approximate lower visual row.
 - Energy decays every 10 ms with an approximately 1.757-second half-life above
-  about 16/255. Below that, each distinct realizable dim color holds for 250 ms.
+  about 16/255. Below that, each distinct realizable dim color holds for 50 ms.
   The last five green levels (7, 6, 4, 3, 1) each hold equally before black.
   Global brightness can merge physical levels; timing tests cover output before
-  that final scaling.
+  that final scaling. The shorter tail reduces the total fade duration; the
+  earlier exponential fade is unchanged.
 - Frames are capped at 50 fps. Each half gets an adaptive RGB palette with up to
   15 nonblack colors. An isolated splash fits exactly; busy overlapping splashes
-  may merge nearby energy levels. Temporal dithering is not used.
+  may merge nearby energy levels. Their group memberships remain fixed during
+  uninterrupted decay. Temporal dithering is not used.
 - The Neuron observes the stock five-byte key packets without changing input.
   Per-layer Bazecor colors and mode changes are filtered while Splash owns LEDs.
   Turning Splash off restores all saved maps, the palette and selected stock mode.
@@ -80,11 +85,11 @@ The script runs input, animation, ownership, transport and side-instruction test
 then builds and verifies the installable package. Logs are in `build/verification`.
 Select this exact folder in Bazecor's custom firmware folder picker:
 
-    build/install/splash-heatmap-v1.5.0-r11
+    build/install/splash-heatmap-v1.5.0-r12
 
 It contains `Wireless_neuron.hex`, `keyscanner.bin`, `SHA256SUMS`, a manifest and
 this README. The Neuron is rebuilt from source. The side image is the SAME image
-as revisions 2 through 10; already patched halves do not require a different side
+as revisions 2 through 11; already patched halves do not require a different side
 image. Bazecor compares side application CRCs during its normal upgrade process.
 No automatic flashing is performed by the build scripts.
 
