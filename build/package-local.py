@@ -82,7 +82,7 @@ out.mkdir(parents=True, exist_ok=True)
 (out / 'keyscanner.bin').write_bytes(side)
 shutil.copyfile(final_path, out / 'Wireless_neuron.hex')
 shutil.copyfile(root / 'docs/splash-heatmap.md', out / 'README.txt')
-for name in ('left-led-freeze.md', 'repositories.md', 'fade-stepping.md', 'input-profile-loss.md', 'tail-driver-investigation.md', 'accelerating-tail.md', 'r15-user-regressions.md'):
+for name in ('left-led-freeze.md', 'repositories.md', 'fade-stepping.md', 'input-profile-loss.md', 'tail-driver-investigation.md', 'accelerating-tail.md', 'r15-user-regressions.md', 'qmk-heatmap.md'):
     shutil.copyfile(root / 'docs' / name, out / name)
 hashes = {f: sha(out / f) for f in ['Wireless_neuron.hex', 'keyscanner.bin']}
 (out / 'SHA256SUMS').write_text(''.join(f'{digest}  {name}\n' for name, digest in hashes.items()))

@@ -1,6 +1,10 @@
 # End-of-fade investigation and separate anti-ghost experiment
 
-Revision 15 uses the QMK heatmap mapping and a pure-blue cold fade instead of
+Revision 16 restores the pre-QMK red/green animation with decreasing tail waits;
+see [the current timing candidate](accelerating-tail.md). The side binary is
+unchanged, and the physical red tint is still unresolved.
+
+Revision 15 used the QMK heatmap mapping and a pure-blue cold fade instead of
 the red/green animation investigated below. It keeps the ordinary side binary
 unchanged. The physical red tint remains unconfirmed; these earlier observations
 and the separately packaged r12 anti-ghost experiment are retained as evidence.
