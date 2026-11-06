@@ -2,8 +2,8 @@
 """Invert the exact released Raise 2 Layer renderer's gamma/channel conversion.
 
 No firmware is modified. Input is restricted to the official 1.5.0 side image.
-The renderer loads its LUT at 0x10012c62, and red/green gain literals at
-0x10012f68/0x10012f60. It rounds via float32 operations then truncates to integer.
+The renderer loads its LUT at 0x10012c62, and red/green/blue gain literals at
+0x10012f68/0x10012f60/0x10012f64. It rounds via float32 operations then truncates to integer.
 """
 from pathlib import Path
 import argparse
@@ -24,7 +24,7 @@ def transfer_tables():
     assert hashlib.sha256(image).hexdigest() == STOCK_SHA
     table = image[0x100267a4 - BIAS:0x100268a4 - BIAS]
     gains = [struct.unpack_from('<f', image, address - BIAS)[0]
-             for address in (0x10012f68, 0x10012f60)]
+             for address in (0x10012f68, 0x10012f60, 0x10012f64)]
     return [[min(255, int(float32(value * gain))) for value in table] for gain in gains]
 
 
@@ -38,7 +38,8 @@ def generated_header():
 #include <stdint.h>
 namespace SplashColor {
 '''
-    for name, table in zip(('red', 'green'), transfer_tables()):
+    result += 'static const uint8_t common_max = ' + str(min(map(max, transfer_tables()))) + ';\n'
+    for name, table in zip(('red', 'green', 'blue'), transfer_tables()):
         inverse = [min(range(256), key=lambda raw: abs(table[raw] - value)) for value in range(256)]
         assert inverse[0] == 0
         result += 'static const uint8_t ' + name + '[256] = {\n'

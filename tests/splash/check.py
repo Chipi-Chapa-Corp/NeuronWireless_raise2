@@ -2,6 +2,7 @@
 """Run the actual release Hand decoder and matrix scan on captured-format packets."""
 from pathlib import Path
 import importlib.util
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -136,6 +137,11 @@ int main() {
   std::cout<<"Actual v1.5.0 Hand decoder and matrix scan: all 80 positions passed\n";
 }
 '''
+qmk_reference = root / 'tests/splash/qmk_reference'
+qmk_pin = json.loads((qmk_reference / 'upstream.json').read_text())
+assert qmk_pin['commit'] == 'f5db962110615fd263c3ebf9f0402e7c2b08fbe4'
+for path, digest in qmk_pin['files_sha256'].items():
+    assert hashlib.sha256((qmk_reference / Path(path).name).read_bytes()).hexdigest() == digest
 color_spec = importlib.util.spec_from_file_location('splash_color', root / 'tools/generate-splash-color.py')
 color_tool = importlib.util.module_from_spec(color_spec)
 color_spec.loader.exec_module(color_tool)
@@ -144,7 +150,7 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     temp = Path(temp)
     (temp / 'actual_color_transfer.inc').write_text('\n'.join(
         'static const uint8_t ' + name + '_transfer[256] = {' + ','.join(map(str, table)) + '};'
-        for name, table in zip(('red', 'green'), color_tool.transfer_tables())))
+        for name, table in zip(('red', 'green', 'blue'), color_tool.transfer_tables())))
     test = temp / 'decoder.cpp'
     test.write_text(prefix + scan_function + suffix)
     flags = ['g++', '-std=c++11', '-fsanitize=address,undefined', '-g',
@@ -158,7 +164,8 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     subprocess.run([str(temp / 'decoder')], check=True)
     subprocess.run(['g++', '-std=c++11', '-Wall', '-Wextra', '-fsanitize=address,undefined',
                     '-I' + str(root / 'src'), '-I' + str(temp), '-I' + str(root / 'libraries/Communications/src'),
-                    str(root / 'tests/splash/model.cpp'), '-o', str(temp / 'model')], check=True)
+                    '-I' + str(root / 'tests/splash/qmk_reference'), str(root / 'tests/splash/model.cpp'),
+                    str(root / 'tests/splash/qmk_reference/color.c'), '-o', str(temp / 'model')], check=True)
     fade_trace = temp / 'fade.bin'
     subprocess.run([str(temp / 'model'), str(fade_trace)], check=True)
     jitter_flags = ['g++', '-std=c++11', '-fsanitize=address,undefined', '-g',

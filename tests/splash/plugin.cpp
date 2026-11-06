@@ -4,6 +4,7 @@
 #include <iostream>
 #include <set>
 #include <vector>
+#include <algorithm>
 #include "SplashHeatmapPlugin.h"
 #include "color_reference.h"
 #include "Communications.h"
@@ -124,10 +125,10 @@ int main(int argc,char **argv) {
   before=Communications.packets.size();Communications.reject=true;
   step(40);assert(Communications.packets.size()==before);
   Communications.reject=false;step(5);
-  assert(displays[0].rgb[8][0]>=17 && displays[0].rgb[8][0]<=19);
-  assert(displays[0].rgb[8][1]>=47 && displays[0].rgb[8][1]<=49);
-  assert(displays[0].rgb[1][1]>=23 && displays[0].rgb[1][1]<=25);
-  assert(displays[0].rgb[3][1]>=11 && displays[0].rgb[3][1]<=13);
+  assert(displays[0].rgb[8][0]==0 && displays[0].rgb[8][1]==0);
+  assert(displays[0].rgb[8][2]>=50 && displays[0].rgb[8][2]<=54);
+  assert(displays[0].rgb[1][2]>=24 && displays[0].rgb[1][2]<=28);
+  assert(displays[0].rgb[3][2]>=11 && displays[0].rgb[3][2]<=15);
   // Held snapshots cannot add heat, and the final black frame is redrawn.
   for(unsigned i=0;i<12500;++i) {Communications.callbacks.call(HAS_KEYS,key);step();}
   for(const auto &color:displays[0].rgb) for(auto channel:color) assert(channel==0);
@@ -139,33 +140,22 @@ int main(int argc,char **argv) {
   size_t draw_start=draws.size();step(12000);
   std::set<unsigned> colors;
   uint8_t previous[4]{};unsigned previous_time=0;
-  std::vector<std::pair<unsigned,unsigned>> color_runs;
+  unsigned lit_start=0,black_time=0;
   for(size_t i=draw_start;i<draws.size();++i) {
     const auto &draw=draws[i];if(draw.side) continue;
     colors.insert((draw.rgb[0]<<16)|(draw.rgb[1]<<8)|draw.rgb[2]);
-    if(color_runs.empty() || color_runs.back().second!=draw.rgb[1])
-      color_runs.push_back({draw.time,draw.rgb[1]});
+    assert(draw.rgb[0]==0 && draw.rgb[1]==0 && draw.rgb[3]==0);
+    if(!lit_start && draw.rgb[2]) lit_start=draw.time;
+    if(lit_start && !black_time && !draw.rgb[2]) black_time=draw.time;
     if(previous_time) {
       assert(draw.time-previous_time>=SplashHeatmap::frame_ms);
-      for(unsigned channel=0;channel<4;++channel) {
-        int delta=static_cast<int>(draw.rgb[channel])-previous[channel];
-        assert(delta<=0 && (delta>=-3 || (draw.rgb[0]==0 && draw.rgb[1]==0 && previous[0]==0 && previous[1]==9))); // Actual channel fade, without dither reversals.
-      }
+      assert(draw.rgb[2]<=previous[2] && previous[2]-draw.rgb[2]<=4);
     }
     memcpy(previous,draw.rgb,4);previous_time=draw.time;
   }
-  unsigned last_hold=0,last_level=0;
-  for(size_t i=0;i+1<color_runs.size();++i) {
-    assert(color_runs[i].second==0 || color_runs[i].second>7);
-    if(color_runs[i+1].second==0) {
-      last_level=color_runs[i].second;
-      last_hold=color_runs[i+1].first-color_runs[i].first;
-    }
-  }
-  assert(last_level==9 && last_hold>=20 && last_hold<=80);
-  std::cout<<"Actual plugin trimmed-tail packet timing: last green level "<<last_level<<"; last level "<<last_hold<<" ms; no faint green; final black\n";
-  assert(colors.size()>=25);
-  std::cout<<"Actual plugin post-gamma RGB trace: "<<colors.size()<<" distinct single-tap colors, monotone fade, <=3/255 channel steps except G9-to-black cutoff\n";
+  assert(lit_start && black_time && black_time-lit_start>=750 && black_time-lit_start<=830);
+  assert(colors.size()>=30);
+  std::cout<<"Actual plugin QMK single tap: "<<colors.size()<<" blue fade colors; visible span "<<black_time-lit_start<<" ms; final black\n";
 
   // Exercise the reported repeated-same-key case through the actual sender,
   // after all earlier snapshots have completed.
@@ -175,18 +165,28 @@ int main(int argc,char **argv) {
     key.data[1]=2;Communications.callbacks.call(HAS_KEYS,key);
   }
   draw_start=draws.size();step(17000);
-  std::set<unsigned> hot_colors;previous_time=0;
+  std::set<unsigned> hot_colors;previous_time=0;unsigned first_hot=0,hot_black=0;
+  bool falling[3]{};bool saw_green=false,saw_cyan=false,saw_blue=false;
   for(size_t i=draw_start;i<draws.size();++i) {
     const auto &draw=draws[i];if(draw.side) continue;
     hot_colors.insert((draw.rgb[0]<<16)|(draw.rgb[1]<<8)|draw.rgb[2]);
-    if(previous_time) for(unsigned c=0;c<4;++c) {
-      int delta=static_cast<int>(draw.rgb[c])-previous[c];
-      assert((delta>=-7 && delta<=7) || (draw.rgb[0]==0 && draw.rgb[1]==0 && previous[0]==0 && previous[1]==9));
+    if(!first_hot) first_hot=draw.time;
+    if(!hot_black && !draw.rgb[0] && !draw.rgb[1] && !draw.rgb[2]) hot_black=draw.time;
+    saw_green|=draw.rgb[1]==138 && draw.rgb[0]<5 && draw.rgb[2]<5;
+    saw_cyan|=draw.rgb[0]==0 && draw.rgb[1]>120 && draw.rgb[2]>120;
+    saw_blue|=draw.rgb[0]==0 && draw.rgb[1]==0 && draw.rgb[2]==138;
+    if(previous_time) {
+      assert(std::max({draw.rgb[0],draw.rgb[1],draw.rgb[2]})<=std::max({previous[0],previous[1],previous[2]}));
+      for(unsigned c=0;c<3;++c) {
+        if(draw.rgb[c]<previous[c]) falling[c]=true;
+        if(falling[c]) assert(draw.rgb[c]<=previous[c]);
+      }
     }
     memcpy(previous,draw.rgb,4);previous_time=draw.time;
   }
-  assert(hot_colors.size()>=150);
-  std::cout<<"Actual repeated-tap post-gamma RGB trace: "<<hot_colors.size()<<" colors, <=7/255 channel steps except G9-to-black cutoff\n";
+  assert(hot_colors.size()>=200 && saw_green && saw_cyan && saw_blue);
+  assert(hot_black-first_hot>=6300 && hot_black-first_hot<=6420);
+  std::cout<<"Actual plugin QMK saturated fade: "<<hot_colors.size()<<" colors; red/green/cyan/blue present; no peak rebounds; final black\n";
 
   Packet connected{};connected.header.command=CONNECTED;connected.header.device=KEYSCANNER_DEFY_LEFT;
   Communications.callbacks.call(CONNECTED,connected);before=Communications.packets.size();
@@ -245,7 +245,7 @@ int main(int argc,char **argv) {
   key.data[1]=2;Communications.callbacks.call(HAS_KEYS,key);
   Packet right_key=key;right_key.header.device=KEYSCANNER_DEFY_RIGHT;
   Communications.callbacks.call(HAS_KEYS,right_key);
-  before=Communications.packets.size();step(1500);
+  before=Communications.packets.size();step(350);
   unsigned peer_frames=0;
   for(size_t n=before;n<Communications.packets.size();++n) {
     const auto &p=Communications.packets[n];
@@ -254,7 +254,7 @@ int main(int argc,char **argv) {
   }
   assert(peer_frames>0);
   Communications.reject_device=UNKNOWN;step(10);
-  assert(displays[0].rgb[8][1]>0 && displays[0].rgb[8][1]<48);
+  assert(displays[0].rgb[8][0]==0 && displays[0].rgb[8][1]==0 && displays[0].rgb[8][2]>0 && displays[0].rgb[8][2]<52);
 
   unsigned last_map=0,maps=0,last_mode[2]{};
   for(unsigned ms=0;ms<300;++ms) {

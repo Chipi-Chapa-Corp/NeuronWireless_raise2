@@ -1,4 +1,11 @@
-# Fade correction and trimmed dim-green ending: revision 14
+# Fade investigation and current QMK heatmap: revision 15
+
+Revision 15 replaces the earlier red/green color and decay experiments below
+with QMK Typing Heatmap's default cooling and HSV mapping, including cyan/blue.
+The low-green cutoff and special tail envelope are removed. Current behavior,
+source attribution, RGB compensation and tests are documented in
+[qmk-heatmap.md](qmk-heatmap.md). The following sections preserve the history
+and evidence for revisions 9–14; their timings are not revision 15's behavior.
 
 The user reported roughly one-second dim-color batches and a shallow red tail
 on a build preceding r9. Revision 9 changed notification handling only; it did

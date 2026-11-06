@@ -2,14 +2,15 @@
 
 Custom Neuron firmware based on **Dygma Raise 2 1.5.0**, with additive splash
 rings, smooth adaptive RGB fading and exclusive LED ownership across layer changes.
-Revision 14 uses a shorter linear low-energy fade and removes the faintest
-five green output levels. The longer high-energy decay, stable palette groups
-and side gamma/channel compensation remain. The red tint's physical cause is
-unconfirmed; skipping its reported phase is an animation change. It retains revision 9's
-disconnect notification fix and normal connection cache, with no periodic refresh
-or diagnostic telemetry. The side application still needs the existing allocation patch;
-it is not rebuilt from source.
+Revision 15 uses QMK Typing Heatmap's cooling and HSV mapping: blue at low
+heat, then cyan, green, yellow and red as typing accumulates. It retains
+half-strength neighbor rings and stable palette groups, compensates all three
+RGB channels through the released side renderer, and keeps the existing
+notification fixes. No periodic refresh or diagnostic telemetry is added.
+The side application still needs the existing allocation patch; it is not
+rebuilt from source and has no new binary change for this revision.
 
+- [QMK algorithm, adaptation and verification](docs/qmk-heatmap.md)
 - [Build, install, enable and rollback](docs/splash-heatmap.md)
 - [End-of-fade driver investigation and optional anti-ghost test](docs/tail-driver-investigation.md)
 - [Fade stepping: cause, renderer tests and limits](docs/fade-stepping.md)
@@ -23,7 +24,7 @@ git -c url.https://github.com/.insteadOf=git@github.com: clone   --branch raise2
 ```
 
 The main custom build command is `bash build/build-local.sh`. It runs software
-checks and creates `build/install/splash-heatmap-v1.5.0-r14`; it never flashes.
+checks and creates `build/install/splash-heatmap-v1.5.0-r15`; it never flashes.
 New Neuron builds still need hardware validation. The following upstream notes
 cover the target and external SDK/toolchain prerequisites.
 

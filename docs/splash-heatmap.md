@@ -1,24 +1,18 @@
-# Raise 2 Splash/Heatmap — revision 14
+# Raise 2 Splash/Heatmap — revision 15
 
-This fork is based on the exact `Raise2_v1.5.0` release. Revision 14 replaces
-r13's one-second quadratic ending with a 500 ms linear Q8 tail, updated every
-10 ms below about 16/255 energy. It does not slow further near black.
+This fork is based on the exact `Raise2_v1.5.0` release. Revision 15 adapts
+QMK Typing Heatmap's default heating, linear cooling and HSV color mapping.
+A single press starts blue; continued typing adds heat through cyan, green,
+yellow and red. During cooling, hot colors keep full effect value, then blue
+fades to black. The earlier red/green envelope and low-energy cutoff are removed.
+See [the QMK source, adaptation and verification](qmk-heatmap.md).
 
-The final faint-green output levels 7, 6, 4, 3 and 1 are removed: rounded energy
-0..8 produces black. At full global brightness, the final lit green level is 9
-for 40 ms in the renderer replay (30 ms in the plugin's paced packet test),
-then off. This deliberately trades a larger final cutoff for no lingering dim
-green. A single-press center turns off at 2.92 s, compared with r13's 3.50 s;
-a saturated center turns off at 7.14 s, compared with 7.72 s.
-
-The cutoff also hides very faint outer rings until more heat accumulates.
-Fractional heat remains available for additive presses. Gamma compensation,
-the longer high-energy exponential decay and stable palette groups remain.
-The red tint's physical cause is unconfirmed: avoiding the reported phase is
-not proof of a hardware fix. The ordinary r14 package uses the same map-only
-side image as r13. The separate anti-ghost experiment is not included. See
-[the fade investigation](fade-stepping.md) and
-[the driver investigation](tail-driver-investigation.md).
+The effect's RGB ceiling is 138 because the stock side renderer attenuates blue.
+All three channels are compensated within that common attainable range; the
+existing Bazecor global brightness setting still applies afterwards. This is
+not a photometric calibration or proof that the earlier physical red tint is
+gone. The ordinary r15 side image is unchanged from r14; the optional r12
+anti-ghost experiment remains separate.
 
 Revision 9's notification fixes are retained: forwarded wireless disconnects
 cannot erase a live wired route. Splash uses the normal scanner connection cache;
@@ -32,15 +26,14 @@ and regression tests](left-led-freeze.md).
 
 ## Animation
 
-- Each tap adds 48/255 energy immediately. Repeated taps add up to saturation.
-- Neighbor rings receive half the preceding ring's energy: 24, 12, 6, 3, 1.5,
-  and so on in fractional precision. Diagonal neighbors are included. Splash
-  stays within each half; thumb keys use an approximate lower visual row.
-- Energy decays every 10 ms with an approximately 1.757-second half-life above
-  about 16/255. Below that, energy follows a 500 ms linear tail in Q8 precision.
-  Rounded energies 0..8 are black, skipping the five faintest green outputs. Integer RGB/PWM output can still repeat between changes.
-  Global brightness can merge physical levels; timing tests cover output before
-  that final scaling.
+- Each tap adds 32/255 heat immediately. Repeated taps add up to saturation.
+- Neighbor rings receive half the preceding ring's heat: 16, 8, 4, 2, 1,
+  then fractional amounts. Diagonal neighbors are included. Splash stays within
+  each half; thumb keys use an approximate lower visual row.
+- Every 25 ms, all keys lose one heat unit. A single center cools in about
+  0.8 seconds; a saturated center in about 6.375 seconds. There is no exponential
+  decay, low-end cutoff or additional shade-hold timer. Global brightness can
+  merge physical PWM levels; timing tests cover output before that final scaling.
 - Frames are capped at 50 fps. Each half gets an adaptive RGB palette with up to
   15 nonblack colors. An isolated splash fits exactly; busy overlapping splashes
   may merge nearby energy levels. Their group memberships remain fixed during
@@ -93,11 +86,11 @@ The script runs input, animation, ownership, transport and side-instruction test
 then builds and verifies the installable package. Logs are in `build/verification`.
 Select this exact folder in Bazecor's custom firmware folder picker:
 
-    build/install/splash-heatmap-v1.5.0-r14
+    build/install/splash-heatmap-v1.5.0-r15
 
 It contains `Wireless_neuron.hex`, `keyscanner.bin`, `SHA256SUMS`, a manifest and
 this README. The Neuron is rebuilt from source. The side image is the SAME image
-as revisions 2 through 13; already patched halves do not require a different side
+as revisions 2 through 14; already patched halves do not require a different side
 image. Bazecor compares side application CRCs during its normal upgrade process.
 No automatic flashing is performed by the build scripts.
 

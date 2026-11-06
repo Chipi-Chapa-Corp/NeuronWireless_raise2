@@ -1,5 +1,11 @@
 # End-of-fade investigation and separate anti-ghost experiment
 
+Revision 15 uses the QMK heatmap mapping and a pure-blue cold fade instead of
+the red/green animation investigated below. It keeps the ordinary side binary
+unchanged. The physical red tint remains unconfirmed; these earlier observations
+and the separately packaged r12 anti-ghost experiment are retained as evidence.
+See [the current QMK implementation](qmk-heatmap.md).
+
 The user confirmed r12 improves the earlier fade but every colored key ends with
 faint red before black, and the remaining green turns off sharply. This is not a
 report about a few fixed keys. A live read confirmed r12, Splash enabled and

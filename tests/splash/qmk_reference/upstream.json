@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/qmk/qmk_firmware",
+  "commit": "f5db962110615fd263c3ebf9f0402e7c2b08fbe4",
+  "files_sha256": {
+    "quantum/color.c": "afda5e7242bde4dcec09edb4adbfb5c1f204bd638e29b5c9fb178a0ed7508583",
+    "quantum/rgb_matrix/animations/typing_heatmap_anim.h": "2f4d7343ff3af6918eb190b2db98702fc52e29e7e5f526bc6ed17cdc328c67e4"
+  },
+  "conversion": "hsv_to_rgb_nocie; saturation 255; scale8 fixed; effect brightness 138"
+}
