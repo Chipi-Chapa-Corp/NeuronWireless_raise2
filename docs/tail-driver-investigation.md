@@ -21,6 +21,12 @@ multiplied/truncated before output. A proper finer-range ending would require
 additional side-driver control, rather than another palette timing adjustment.
 The experiment below does not claim to solve the green cutoff.
 
+Revision 13 removes the explicit shade timers and uses a continuous Q8
+quadratic tail instead. At full brightness, the renderer still produces the
+same five dim levels: 540 ms in total, including 220 ms at PWM 1. It changes
+the fade envelope, not the minimum physical step; a perfectly smooth physical
+ending is not established by that change.
+
 ## Test beyond the renderer buffer
 
 `tests/splash/side_driver.py` extends the previous emulation through the released
