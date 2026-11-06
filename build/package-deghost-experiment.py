@@ -16,8 +16,8 @@ assert original['custom_version']=='v1.5.0-splash12'
 assert sha(base/'Wireless_neuron.hex')==original['files_sha256']['Wireless_neuron.hex']
 assert sha(base/'keyscanner.bin')==original['files_sha256']['keyscanner.bin']
 # Reuse the exact verified Neuron artifact, never relabel an unbuilt main image.
-for name,digest in original['source_sha256'].items():
-    assert sha(root/name)==digest, 'Base r12 source changed: '+name
+# This copies an existing verified r12 artifact. Current workspace sources may
+# have moved on; preserve the original image's recorded source commit/hash.
 patcher=runpy.run_path(str(root/'side-patches/tools/patch-side-deghost.py'))
 stock=(root/'build/vendor/keyscanner-v1.5.0.bin').read_bytes()
 side=patcher['patch'](stock)

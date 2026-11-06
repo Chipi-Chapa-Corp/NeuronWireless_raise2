@@ -64,7 +64,8 @@ for scenario in range(3):
         assert len(colors) >= (30 if scenario == 0 else 160)
         tail_holds = [runs[i+1][0] - time for i, (time, rgb) in enumerate(runs[:-1])
                       if rgb[0] == 0 and 0 < rgb[1] <= 7]
-        assert len(tail_holds) == 5 and all(40 <= hold <= 60 for hold in tail_holds), tail_holds
-        print(f'Actual RP2040 {"single-tap" if scenario == 0 else "saturated"} fade: {len(colors)} output colors; dim tail holds {min(tail_holds)}-{max(tail_holds)} ms; final black')
+        assert len(tail_holds) == 5 and all(20 <= hold <= 300 for hold in tail_holds), tail_holds
+        assert 400 <= sum(tail_holds) <= 750 and tail_holds[-1] >= 150 and tail_holds[-1] > tail_holds[0], tail_holds
+        print(f'Actual RP2040 {"single-tap" if scenario == 0 else "saturated"} fade: {len(colors)} output colors; eased tail total {sum(tail_holds)} ms; last level {tail_holds[-1]} ms; final black')
     else:
         print('Actual RP2040 overlapping-splash fade: every key matches post-gamma RGB, no brightness reversals or red tail, final black')

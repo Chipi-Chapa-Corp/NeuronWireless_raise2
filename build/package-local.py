@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify and package revision 12; never connect to a keyboard."""
+"""Verify and package revision 13; never connect to a keyboard."""
 from pathlib import Path
 import hashlib
 import importlib.util
@@ -12,7 +12,7 @@ import tempfile
 from intelhex import IntelHex
 
 root = Path(__file__).resolve().parents[1]
-out = root / 'build/install/splash-heatmap-v1.5.0-r12'
+out = root / 'build/install/splash-heatmap-v1.5.0-r13'
 app = IntelHex(str(root / 'build/release/NeuronWireless_raise2.hex'))
 final_path = root / 'build/release/NeuronWireless_raise2_final.hex'
 final = IntelHex(str(final_path))
@@ -28,7 +28,7 @@ assert all(final[a] == app[a] for a in app.addresses())
 assert all(final[a] == rf[a] for a in rf.addresses())
 sp, reset = struct.unpack('<II', bytes(app.tobinarray(start=0x2E000, size=8)))
 assert 0x20009400 <= sp <= 0x20020000 and reset & 1 and 0x2E000 <= reset < 0x70000
-assert b'v1.5.0-splash12' in bytes(app.tobinarray())
+assert b'v1.5.0-splash13' in bytes(app.tobinarray())
 for removed in (b'splash.stats', b'splash.transport', b'splash.refresh'):
     assert removed not in bytes(app.tobinarray()), 'Removed diagnostic command remains in firmware'
 
@@ -68,9 +68,10 @@ assert 'Actual RP2040 scheduler/timers/Layer renderer: 33/36 LEDs' in tests_log
 assert 'Released side radio disconnect packets: valid CRC, no false wired disconnect, continuing keys and cached LED routing passed' in tests_log
 assert 'BLE cache ownership: old implementation fails the regression as expected' in tests_log
 assert 'Wired notification boundary: old implementation fails the regression as expected' in tests_log
-assert 'Dim tail model: every final distinct green holds 50 ms' in tests_log
-assert 'Actual plugin dim-tail packet timing: five equal holds within 50 +/- 30 ms' in tests_log
-assert 'Actual RP2040 single-tap fade: 32 output colors; dim tail holds 40-60 ms; final black' in tests_log
+assert 'Continuous tail model: Q8 brightness changes every 10 ms along a 1000 ms quadratic ease-out; no shade holds' in tests_log
+ending_test = re.search(r'Actual plugin eased-tail packet timing: final five green levels total (\d+) ms; last level (\d+) ms; final black', tests_log)
+assert ending_test and 400 <= int(ending_test.group(1)) <= 750 and 150 <= int(ending_test.group(2)) <= 300
+assert 'Actual RP2040 single-tap fade: 32 output colors; eased tail total' in tests_log
 assert 'Actual RP2040 overlapping-splash fade: every key matches post-gamma RGB, no brightness reversals or red tail, final black' in tests_log
 assert 'Stable palette groups: 230340 post-gamma key samples fade without brightening reversals' in tests_log
 assert re.search(r'Original adaptive regrouping: [1-9]\d* post-gamma brightening reversals', tests_log)
@@ -79,7 +80,7 @@ out.mkdir(parents=True, exist_ok=True)
 (out / 'keyscanner.bin').write_bytes(side)
 shutil.copyfile(final_path, out / 'Wireless_neuron.hex')
 shutil.copyfile(root / 'docs/splash-heatmap.md', out / 'README.txt')
-for name in ('left-led-freeze.md', 'repositories.md', 'fade-stepping.md', 'input-profile-loss.md'):
+for name in ('left-led-freeze.md', 'repositories.md', 'fade-stepping.md', 'input-profile-loss.md', 'tail-driver-investigation.md'):
     shutil.copyfile(root / 'docs' / name, out / name)
 hashes = {f: sha(out / f) for f in ['Wireless_neuron.hex', 'keyscanner.bin']}
 (out / 'SHA256SUMS').write_text(''.join(f'{digest}  {name}\n' for name, digest in hashes.items()))
@@ -89,14 +90,14 @@ manifest = {
     'source_commit': subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
     'submodules': {line.split()[1]:line.split()[0] for line in
         subprocess.check_output(['git', '-C', str(root), 'submodule', 'status', '--recursive'], text=True).splitlines()},
-    'custom_version': 'v1.5.0-splash12',
+    'custom_version': 'v1.5.0-splash13',
     'hardware_tested': False,
     'hardware_recovery_tested': False,
     'previous_revision_hardware_report': 'r5: left LEDs frozen, right active; live status shows left route UNKNOWN, 44065 queued frames unchanged, last frame about 12 minutes old despite newer left key packets.',
     'observed_neuron_route_failure_confirmed': True,
     'event_that_cleared_scanner_route_confirmed': False,
     'previous_revision_user_reported_working': 'v1.5.0-splash2',
-    'installation_recommendation': 'Fix candidate for observed stale scanner route: suppress relabeled radio disconnects at the wired receiver and preserve wired cache entries on BLE disconnect. Splash uses the normal scanner cache. No periodic refresh or diagnostic counters. Gamma/channel compensation and 50 ms dim-color holds and stable palette groups address reproduced stepping and brightness reversals. New Neuron image is not hardware-tested; side binary unchanged.',
+    'installation_recommendation': 'Fix candidate for observed stale scanner route: suppress relabeled radio disconnects at the wired receiver and preserve wired cache entries on BLE disconnect. Splash uses the normal scanner cache. No periodic refresh or diagnostic counters. Gamma/channel compensation is retained. A continuous 1000 ms Q8 ease-out replaces explicit shade holds; stable palette groups prevent reproduced brightness reversals. New Neuron image is not hardware-tested; side binary unchanged.',
     'side_identical_to_revision_2': True,
     'palette_strategy': 'Adaptive palette with membership retained between keypresses, up to 15 nonblack energy groups per half; inverse released gamma/RG gains; no temporal dithering',
     'requires_patched_firmware_on_both_halves': True,
@@ -118,10 +119,14 @@ manifest = {
         'full_hardware_or_flashing_test':False,
         'tap_boost':48, 'neighbor_falloff_per_ring':0.5,
         'frame_cap_fps':50, 'high_energy_decay_half_life_ms_approx':1757,
-        'dim_tail_distinct_color_hold_ms':50,
+        'tail_fade_duration_ms':1000,
+        'explicit_shade_holds':False,
+        'continuous_tail_energy_update_ms':10,
         'actual_renderer_single_tap_colors':32,
         'actual_renderer_saturated_colors':169,
-        'actual_renderer_dim_tail_hold_ms_before_global_brightness':[40,60],
+        'actual_plugin_final_five_levels_total_ms':int(ending_test.group(1)),
+        'actual_plugin_last_level_ms':int(ending_test.group(2)),
+        'sub_minimum_pwm_levels_added':False,
         'actual_gamma_transfer_all_256_red_green_inputs_verified':True,
         'physical_red_tail_cause_confirmed':False,
         'palette_membership_stable_between_new_keypresses':True,

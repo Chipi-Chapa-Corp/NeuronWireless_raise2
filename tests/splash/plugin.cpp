@@ -154,15 +154,18 @@ int main(int argc,char **argv) {
     }
     memcpy(previous,draw.rgb,4);previous_time=draw.time;
   }
-  unsigned holds=0;
+  unsigned holds=0,total_hold=0,first_hold=0,last_hold=0;
   for(size_t i=0;i+1<color_runs.size();++i) {
     if(color_runs[i].second>0 && color_runs[i].second<=7) {
       unsigned duration=color_runs[i+1].first-color_runs[i].first;
-      assert(duration>=20 && duration<=80);++holds;
+      assert(duration>=20 && duration<=300);
+      if(!holds) first_hold=duration;
+      last_hold=duration;total_hold+=duration;++holds;
     }
   }
   assert(holds==5);
-  std::cout<<"Actual plugin dim-tail packet timing: five equal holds within 50 +/- 30 ms\n";
+  assert(total_hold>=400 && total_hold<=750 && last_hold>=150 && last_hold>first_hold);
+  std::cout<<"Actual plugin eased-tail packet timing: final five green levels total "<<total_hold<<" ms; last level "<<last_hold<<" ms; final black\n";
   assert(colors.size()>=30);
   std::cout<<"Actual plugin post-gamma RGB trace: "<<colors.size()<<" distinct single-tap colors, monotone fade, <=3/255 channel steps\n";
 

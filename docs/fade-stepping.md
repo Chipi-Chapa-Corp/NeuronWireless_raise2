@@ -1,4 +1,4 @@
-# Fade correction, faster holds and stable groups: revision 12
+# Fade correction and a continuous ending: revision 13
 
 The user reported roughly one-second dim-color batches and a shallow red tail
 on a build preceding r9. Revision 9 changed notification handling only; it did
@@ -63,6 +63,27 @@ nonincreasing red and a single rise/fall of green across complete no-input fades
 A green increase during the initial red-to-green cooling phase is intentional;
 a later rebound after green begins falling is rejected.
 
+## Revision 13: remove the shade holds
+
+The user still saw green linger and then drop to black. The low-end code did
+explicitly hold each shade: it stopped updating the energy until a 50 ms timer
+expired, then selected the next realizable color. Those holds are now removed.
+
+Below about 16/255, each key records the current energy and evolves it every
+10 ms using `start_energy * remaining_time^2 / duration^2`, with a 1000 ms
+nominal duration. This preserves Q8 fractional brightness between output-level
+boundaries and reduces the brightness loss as the ending progresses. A new
+press adds heat and restarts that key's tail from its new level. Higher-energy
+exponential decay and fixed palette membership during no-input fades remain.
+
+The native test starts a known 12/255 neighbor directly in the tail, checks every
+10 ms against the expected curve, verifies decreasing energy between RGB
+boundaries, and checks the decreasing loss. Packet tests then verify the last
+five visible green levels take 400–750 ms in total, with the last lit level
+lasting 150–300 ms. That is a measured quantized output bound, not an explicit
+hold schedule. The native and released-renderer tests still require monotone
+cold fades, no brightness reversals and final black.
+
 ## Verification and limits
 
 `tests/splash/color_transfer.py` executes the released ARM Layer renderer. It
@@ -72,12 +93,10 @@ outputs after gamma. The actual Neuron plugin's packet stream is separately
 checked using the oracle verified by that execution.
 
 The corrected isolated fade has **32 output colors** including black; the
-saturated fade has **169**. The final green levels **7, 6, 4, 3, 1** each hold for **50 ms** on the model's
-10 ms clock. Replaying at 50 fps measures **40–60 ms** holds; the actual
-Neuron plugin packet trace must remain within 50 +/- 30 ms. New taps interrupt
-the fade, and busy palette clustering can merge nearby levels. There are no new periodic refreshes,
-diagnostics, temporal dithering or side instruction patches. Input and storage
-baseline checks and r9's notification regressions remain required.
+saturated model fade has **169**. Exact displayed holds now depend on the
+continuous curve crossing quantized output thresholds. There are no explicit
+shade holds, periodic refreshes or temporal dithering. Input/storage baseline
+checks and the notification regressions remain required.
 
 These results describe the output buffer before global brightness scaling.
 Lower global brightness reduces the physical PWM levels available, and real

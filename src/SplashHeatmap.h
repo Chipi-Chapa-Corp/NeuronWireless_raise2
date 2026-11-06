@@ -11,11 +11,12 @@
 class SplashHeatmap {
  public:
   enum { rows = 5, cols = 8, no_led = 255, max_leds = 36, frame_ms = 20,
-         tap_boost = 48, decay_ms = 10, tail_hold_ms = 50 };
+         tap_boost = 48, decay_ms = 10, tail_fade_ms = 1000 };
 
   void reset(uint32_t now) {
     memset(heat_, 0, sizeof(heat_));
     memset(tail_ticks_, 0, sizeof(tail_ticks_));
+    memset(tail_start_, 0, sizeof(tail_start_));
     memset(groups_valid_, 0, sizeof(groups_valid_));
     last_decay_ = now;
   }
@@ -27,19 +28,25 @@ class SplashHeatmap {
       for (uint8_t index = 0; index < max_leds; ++index) {
         auto &value = heat_[side][index];
         auto &tail_ticks = tail_ticks_[side][index];
-        if (steps >= 5000) { value = 0; tail_ticks = 0; continue; }
+        auto &tail_start = tail_start_[side][index];
+        if (steps >= 5000) { value = 0; tail_ticks = 0; tail_start = 0; continue; }
         for (uint32_t i = 0; i < steps && value; ++i) {
           if (value <= 16 * 256 + 127) {
-            // Below 16/255, hold each distinct post-gamma color for the same
-            // 50 ms. Counting raw RGB units would give unequal visible holds.
-            if (++tail_ticks >= tail_hold_ms / decay_ms) {
-              value = previous_tail_energy(value);
-              tail_ticks = 0;
+            // Continuous Q8 opacity: remove explicit shade holds. Squaring
+            // remaining time slows the brightness loss near the endpoint.
+            if (!tail_start) { tail_start = value; tail_ticks = 0; }
+            const uint16_t ticks = tail_fade_ms / decay_ms;
+            if (++tail_ticks >= ticks) {
+              value = 0; tail_start = 0; tail_ticks = 0;
+            } else {
+              uint16_t remaining = ticks - tail_ticks;
+              value = static_cast<uint32_t>(tail_start) * remaining * remaining / (ticks * ticks);
             }
           } else {
             // Retain the earlier exponential fade (about 1.757 s half-life).
             value = static_cast<uint32_t>(value) * 65278 / 65536;
             tail_ticks = 0;
+            tail_start = 0;
           }
         }
       }
@@ -72,6 +79,7 @@ class SplashHeatmap {
         uint32_t value = heat_[side][index] + ((tap_boost * 256u) >> distance);
         heat_[side][index] = value > 255 * 256u ? 255 * 256u : value;
         tail_ticks_[side][index] = 0;
+        tail_start_[side][index] = 0;
       }
     }
   }
@@ -234,22 +242,11 @@ class SplashHeatmap {
     }
   }
 
-  static uint16_t previous_tail_energy(uint16_t heat) {
-    uint8_t current[4], next[4];
-    color_energy(heat, current);
-    uint16_t value = (static_cast<uint32_t>(heat) + 128) / 256;
-    while (value) {
-      --value;
-      color_energy(value * 256, next);
-      if (memcmp(current, next, sizeof(current)) != 0) return value * 256;
-    }
-    return 0;
-  }
-
   bool groups_valid_[2] = {};
   uint8_t group_indices_[2][max_leds] = {};
   uint8_t group_count_[2] = {}, group_led_count_[2] = {};
   uint8_t tail_ticks_[2][max_leds] = {};
+  uint16_t tail_start_[2][max_leds] = {};
   uint16_t heat_[2][max_leds] = {};
   uint32_t last_decay_ = 0;
 };

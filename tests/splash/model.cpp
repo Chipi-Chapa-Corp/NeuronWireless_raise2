@@ -91,25 +91,33 @@ int main(int argc,char **argv) {
   assert(hot_shades.size()>=160);
   std::cout<<"Repeated-tap post-gamma fade: "<<hot_shades.size()<<" RGB colors, <=5/255 channel change per 20 ms\n";
 
-  // The final distinct green colors each last 50 ms on the 10 ms model
-  // clock, including the last lit level before black. New taps restart a hold.
-  heat.reset(0);heat.press(1,1,0);
-  unsigned previous_level=255, entered=0, equal_holds=0;
-  for(unsigned ms=0;ms<=7000;ms+=10) {
-    heat.tick(ms);heat.make_frame(0,33,frame);
-    uint8_t rgb[4];post_gamma(frame.palette[frame.indices[8]],rgb);
-    if(rgb[1]!=previous_level) {
-      if(previous_level>0 && previous_level<=7) {
-        assert(ms-entered==50);++equal_holds;
-      }
-      previous_level=rgb[1];entered=ms;
-    }
+  // Exercise a known 12/255 neighbor from the first tick of the tail.
+  // Opacity must follow a continuous quadratic ease-out, without shade holds.
+  heat.reset(0);heat.press(0,0,0);
+  static_assert(SplashHeatmap::tail_fade_ms==1000, "one-second ending");
+  unsigned previous_energy=12*256, previous_loss=1000;
+  for(unsigned tick=1;tick<=100;++tick) {
+    heat.tick(tick*10);
+    unsigned remaining=100-tick;
+    unsigned expected=12*256*remaining*remaining/10000;
+    assert(heat.energy(0,2)==expected);
+    unsigned loss=previous_energy-expected;
+    if(expected) assert(loss>0); // Even between RGB quantization boundaries.
+    assert(loss<=previous_loss+1);
+    previous_energy=expected;previous_loss=loss;
   }
-  assert(equal_holds==5);
+  assert(heat.energy(0,2)==0);
+  heat.reset(0);heat.press(0,0,0);heat.tick(500);
+  assert(heat.energy(0,2)==3*256);
+  heat.press(0,0,500); // Reheat while already inside the low-energy tail.
+  assert(heat.energy(0,2)==15*256);
+  heat.tick(510);
+  assert(heat.energy(0,2)==15*256*99*99/10000);
+  heat.tick(1500);assert(heat.energy(0,2)==0);
   heat.reset(0);heat.press(1,1,0);heat.tick(4000);
   heat.press(1,1,4000);assert(heat.value(0,8)>=48);
   heat.tick(4200);assert(heat.value(0,8)>40);
-  std::cout<<"Dim tail model: every final distinct green holds 50 ms; new taps add heat and restart fading\n";
+  std::cout<<"Continuous tail model: Q8 brightness changes every 10 ms along a 1000 ms quadratic ease-out; no shade holds\n";
 
   // Busy overlapping splashes still fit the shared per-half palette, without
   // out-of-range indices, heap allocation, or nondeterministic dither phases.
