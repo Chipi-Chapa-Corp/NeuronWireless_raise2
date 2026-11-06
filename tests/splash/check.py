@@ -28,6 +28,9 @@ allowed = {
     'libraries': {'Communications', 'Spi_slave/SpiPort.cpp', '.gitmodules'},
     'libraries/Communications': {'src/Communications.h',
         'src/device/neuron/defyN2/CommunicationsN2.cpp',
+        'src/device/neuron/defyN2/CommunicationsN2_side.h',
+        'src/device/neuron/common/Communications_side.h',
+        'src/device/neuron/common/Communications_side.cpp',
         'src/device/keyScanner/CommunicationsKS.cpp'},
 }
 for line in git('submodule', 'status', '--recursive').splitlines():
@@ -147,10 +150,25 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     subprocess.run([str(temp / 'plugin'), str(trace)], check=True)
     communication = root / 'libraries/Communications/src'
     transport_source = (communication / 'device/neuron/defyN2/CommunicationsN2.cpp').read_text()
+    begin = transport_source.index('Devices Communications::connectedSideDevice(')
+    end = transport_source.index('\nbool Communications::sendPacket(', begin)
+    (temp / 'actual_route.inc').write_text(transport_source[begin:end])
     begin = transport_source.index('bool Communications::sendPacket(Packet packet)')
     end = transport_source.index('\nbool Communications::sendPacketHostConnection', begin)
     (temp / 'actual_send.inc').write_text(transport_source[begin:end])
     base_flags = ['g++', '-std=c++11', '-fsanitize=address,undefined', '-g']
+    callbacks_start = source.index('    Communications.callbacks.bind(CONNECTED, (')
+    callbacks_end = source.index('    Communications.callbacks.bind(DISCONNECTED, checkBrightness);', callbacks_start)
+    (temp / 'actual_connection_callbacks.inc').write_text(source[callbacks_start:callbacks_end])
+    begin = source.index('Communications_protocol::Devices KeyboardKeyScanner::leftHandDevice(')
+    end = source.index('\nCommunications_protocol::Devices KeyboardKeyScanner::rightHandDevice(', begin)
+    (temp / 'actual_connection_getter.inc').write_text(source[begin:end])
+    common = communication / 'device/neuron/common'
+    subprocess.run(base_flags + ['-I' + str(root / 'tests/splash/stubs'),
+        '-I' + str(common), '-I' + str(communication), '-I' + str(temp),
+        str(root / 'tests/splash/route_state.cpp'), str(common / 'Communications_side.cpp'),
+        str(common / 'Communication_model.cpp'), '-o', str(temp / 'route_state')], check=True)
+    subprocess.run([str(temp / 'route_state')], check=True)
     subprocess.run(base_flags + ['-I' + str(communication), '-I' + str(temp),
         str(root / 'tests/splash/transport.cpp'), '-o', str(temp / 'transport')], check=True)
     subprocess.run([str(temp / 'transport')], check=True)

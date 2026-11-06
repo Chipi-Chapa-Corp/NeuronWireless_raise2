@@ -1,11 +1,15 @@
-# Raise 2 Splash/Heatmap — revision 7
+# Raise 2 Splash/Heatmap — revision 8
 
-This fork is based on the exact `Raise2_v1.5.0` release. Revision 7 keeps revision
-5's animation and event-driven wake handling, with diagnostic counters/commands
-and periodic palette/map refresh removed. The helper provides only on, off and
-status. The new Neuron image has passed software checks but has not been tested
-on the physical keyboard. No keyboard commands or flashing were performed while
-preparing it.
+This fork is based on the exact `Raise2_v1.5.0` release. Revision 8 fixes the
+observed failure where the scanner's left LED route is UNKNOWN while left input
+continues. Splash now selects destinations from the active communications
+transport, rather than that separate event-maintained connection cache. It keeps
+revision 5's animation without diagnostic counters or periodic refresh.
+
+The new Neuron image has passed software checks but has not been tested on the
+physical keyboard. Existing r5 status was read while the real fault was present;
+no LED commands, resets or flashing were performed. See [the captured evidence
+and regression tests](left-led-freeze.md).
 
 ## Animation
 
@@ -37,11 +41,14 @@ not periodic recovery. A frame blocked from enqueueing for a second is discarded
 so a recovered transport sends current heat instead of an old bright snapshot.
 One unavailable half does not block its peer.
 
-An intermittent left LED freeze was reported on r4 while typing still worked.
-The user reported r5 working well without an observed freeze. Its physical cause
-has not been confirmed. Removing the refresh does not establish that the problem
-is fixed. Software emulation finds burst redraw commands can postpone drawing,
-but drawing resumes 10 ms after the burst ends.
+On 2026-11-06 the freeze recurred on r5 despite its periodic refresh. Captured
+status showed the left route was UNKNOWN and its queued-frame count had stopped
+for about 12 minutes, while newer left input packets arrived and the right kept
+updating. The refresh also skipped UNKNOWN routes. Revision 8 removes Splash's
+dependency on that stale cache; it does not change the side application or retry
+on a timer. The event that originally invalidated the cache has not been captured.
+The regression reproduces the stale-route state and distinguishes it from a
+real physical disconnect. Hardware confirmation of the new fix is still pending.
 
 ## Build and install
 
@@ -62,7 +69,7 @@ The script runs input, animation, ownership, transport and side-instruction test
 then builds and verifies the installable package. Logs are in `build/verification`.
 Select this exact folder in Bazecor's custom firmware folder picker:
 
-    build/install/splash-heatmap-v1.5.0-r7
+    build/install/splash-heatmap-v1.5.0-r8
 
 It contains `Wireless_neuron.hex`, `keyscanner.bin`, `SHA256SUMS`, a manifest and
 this README. The Neuron is rebuilt from source. The side image is the SAME image
@@ -107,7 +114,10 @@ They are intentionally not published in Git.
 
 ## Verification limits
 
-Tests exercise all 80 stock matrix positions, unchanged keymap/storage object
+Tests reproduce live key input with an UNKNOWN scanner route through the real
+ComSide state machine and stock connection callbacks. LED tests cover both
+UNKNOWN and stale known scanner routes, active wired/RF/BLE route selection and
+real disconnects. Tests also exercise all 80 stock matrix positions, unchanged keymap/storage object
 hashes, splash rings, fractional decay, RGB smoothness, per-layer isolation,
 reconnects, restore, FIFO overflow/retry, and the absence of periodic idle writes.
 The release RP2040 map handlers execute 10,000 updates in Unicorn without vector

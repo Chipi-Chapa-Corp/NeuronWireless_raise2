@@ -215,6 +215,25 @@ int main(int argc,char **argv) {
   command(1);step(30);
   assert(displays[0].rgb[8][1]==0);
 
+  // Captured r5 failure: scanner cache says UNKNOWN while the left transport
+  // still supplies keys. LED routing must use the transport, without a timer.
+  kaleidoscope::Runtime.scanner.left=UNKNOWN;
+  key.data[1]=0;Communications.callbacks.call(HAS_KEYS,key);
+  key.data[1]=2;Communications.callbacks.call(HAS_KEYS,key);
+  step(40);
+  assert(displays[0].rgb[8][1]>0);
+  kaleidoscope::Runtime.scanner.left=RF_DEFY_LEFT; // A stale known route is also ignored.
+  before=Communications.packets.size();step(40);
+  assert(Communications.packets.size()>before);
+  for(size_t n=before;n<Communications.packets.size();++n)
+    assert(Communications.packets[n].header.device==KEYSCANNER_DEFY_LEFT);
+  // A genuine transport disconnect must still stop writes to that half.
+  Communications.left_device=UNKNOWN;before=Communications.packets.size();step(40);
+  assert(Communications.packets.size()==before);
+  Communications.left_device=KEYSCANNER_DEFY_LEFT;step(30);
+  kaleidoscope::Runtime.scanner.left=KEYSCANNER_DEFY_LEFT;
+  step(17000); // Let the routing regression's extra tap fully decay.
+
   // A blocked half must neither freeze its peer nor replay an ancient bright
   // snapshot once transport returns. Exercise behavior without counters.
   Communications.reject_device=KEYSCANNER_DEFY_LEFT;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify and package revision 7; never connect to a keyboard."""
+"""Verify and package revision 8; never connect to a keyboard."""
 from pathlib import Path
 import hashlib
 import importlib.util
@@ -12,7 +12,7 @@ import tempfile
 from intelhex import IntelHex
 
 root = Path(__file__).resolve().parents[1]
-out = root / 'build/install/splash-heatmap-v1.5.0-r7'
+out = root / 'build/install/splash-heatmap-v1.5.0-r8'
 app = IntelHex(str(root / 'build/release/NeuronWireless_raise2.hex'))
 final_path = root / 'build/release/NeuronWireless_raise2_final.hex'
 final = IntelHex(str(final_path))
@@ -28,7 +28,7 @@ assert all(final[a] == app[a] for a in app.addresses())
 assert all(final[a] == rf[a] for a in rf.addresses())
 sp, reset = struct.unpack('<II', bytes(app.tobinarray(start=0x2E000, size=8)))
 assert 0x20009400 <= sp <= 0x20020000 and reset & 1 and 0x2E000 <= reset < 0x70000
-assert b'v1.5.0-splash7' in bytes(app.tobinarray())
+assert b'v1.5.0-splash8' in bytes(app.tobinarray())
 for removed in (b'splash.stats', b'splash.transport', b'splash.refresh'):
     assert removed not in bytes(app.tobinarray()), 'Removed diagnostic command remains in firmware'
 
@@ -58,11 +58,14 @@ assert rgb_test and int(rgb_test.group(1)) >= 35, 'Actual RGB wire fade evidence
 hot_test = re.search(r'Actual repeated-tap RGB wire trace: (\d+) colors', tests_log)
 assert hot_test and int(hot_test.group(1)) >= 190, 'Repeated-tap wire fade evidence missing'
 assert 'Actual RP2040 scheduler/timers/Layer renderer: 33/36 LEDs' in tests_log
+assert 'Actual ComSide + stock connection callbacks: UNKNOWN scanner route with live key input reproduced' in tests_log
 # Prepare all bytes only after image and stock-input/storage checks have passed.
 out.mkdir(parents=True, exist_ok=True)
 (out / 'keyscanner.bin').write_bytes(side)
 shutil.copyfile(final_path, out / 'Wireless_neuron.hex')
 shutil.copyfile(root / 'docs/splash-heatmap.md', out / 'README.txt')
+for name in ('left-led-freeze.md', 'repositories.md'):
+    shutil.copyfile(root / 'docs' / name, out / name)
 hashes = {f: sha(out / f) for f in ['Wireless_neuron.hex', 'keyscanner.bin']}
 (out / 'SHA256SUMS').write_text(''.join(f'{digest}  {name}\n' for name, digest in hashes.items()))
 manifest = {
@@ -71,13 +74,14 @@ manifest = {
     'source_commit': subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
     'submodules': {line.split()[1]:line.split()[0] for line in
         subprocess.check_output(['git', '-C', str(root), 'submodule', 'status', '--recursive'], text=True).splitlines()},
-    'custom_version': 'v1.5.0-splash7',
+    'custom_version': 'v1.5.0-splash8',
     'hardware_tested': False,
     'hardware_recovery_tested': False,
-    'previous_revision_hardware_report': 'r4: intermittent left LED freeze while typing remained functional. r5 installed, no freeze observed yet as of 2026-11-06.',
-    'physical_led_freeze_root_cause_confirmed': False,
+    'previous_revision_hardware_report': 'r5: left LEDs frozen, right active; live status shows left route UNKNOWN, 44065 queued frames unchanged, last frame about 12 minutes old despite newer left key packets.',
+    'observed_neuron_route_failure_confirmed': True,
+    'event_that_cleared_scanner_route_confirmed': False,
     'previous_revision_user_reported_working': 'v1.5.0-splash2',
-    'installation_recommendation': 'Clean Splash build without diagnostic counters or periodic refresh. New Neuron image is not hardware-tested; side is identical to r2-r6.',
+    'installation_recommendation': 'Fix candidate for observed stale scanner route: select LED destinations from the active communications transport. No periodic refresh or diagnostic counters. New Neuron image is not hardware-tested; side binary unchanged.',
     'side_identical_to_revision_2': True,
     'palette_strategy': 'Per-frame adaptive RGB palette, up to 15 nonblack energy groups per half; no temporal dithering',
     'requires_patched_firmware_on_both_halves': True,
@@ -106,6 +110,9 @@ manifest = {
         'stale_pending_frame_timeout_ms':1000,
         'wake_mode_request_host_resume_and_one_sided_stall_tests':True,
         'actual_spi_fifo_overflow_and_retry_test':True,
+        'unknown_and_stale_scanner_route_regression':True,
+        'actual_comside_live_input_with_unknown_scanner_route_reproduced':True,
+        'wired_rf_ble_transport_selection_and_real_disconnect_tests':True,
         'actual_rp2040_scheduler_timer_layer_renderer_test':True,
     },
     'neuron_flash_range': [hex(final.minaddr()), hex(final.maxaddr())],
@@ -113,6 +120,9 @@ manifest = {
         root/'src/SplashHeatmap.h',root/'src/SplashHeatmapPlugin.cpp',root/'src/SplashHeatmapPlugin.h',
         root/'src/mainDefy.cpp',root/'libraries/Spi_slave/SpiPort.cpp',root/'libraries/Communications/src/Communications.h',
         root/'libraries/Communications/src/device/neuron/defyN2/CommunicationsN2.cpp',
+        root/'libraries/Communications/src/device/neuron/defyN2/CommunicationsN2_side.h',
+        root/'libraries/Communications/src/device/neuron/common/Communications_side.cpp',
+        root/'libraries/Communications/src/device/neuron/common/Communications_side.h',
         root/'libraries/Communications/src/device/keyScanner/CommunicationsKS.cpp',
         root/'tools/patch-side-led-maps.py',root/'tools/splash.py',
         root/'side-patches/tools/patch-side-led-maps.py',root/'side-patches/patches/raise2-v1.5.0.json']},

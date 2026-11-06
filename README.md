@@ -2,11 +2,13 @@
 
 Custom Neuron firmware based on **Dygma Raise 2 1.5.0**, with additive splash
 rings, smooth adaptive RGB fading and exclusive LED ownership across layer changes.
-Revision 7 keeps the revision-5 animation with periodic refresh and diagnostic
-telemetry removed. The side application still needs the existing allocation patch;
+Revision 8 fixes an observed left LED freeze by selecting destinations from
+the live communications transport. It keeps the revision-5 animation with
+periodic refresh and diagnostic telemetry removed. The side application still needs the existing allocation patch;
 it is not rebuilt from source.
 
 - [Build, install, enable and rollback](docs/splash-heatmap.md)
+- [Left LED freeze: evidence and route-selection fix](docs/left-led-freeze.md)
 - [Four repositories and pinned submodules](docs/repositories.md)
 - [Side patch source and exact metadata](side-patches/README.md)
 
@@ -15,7 +17,7 @@ git -c url.https://github.com/.insteadOf=git@github.com: clone   --branch raise2
 ```
 
 The main custom build command is `bash build/build-local.sh`. It runs software
-checks and creates `build/install/splash-heatmap-v1.5.0-r7`; it never flashes.
+checks and creates `build/install/splash-heatmap-v1.5.0-r8`; it never flashes.
 New Neuron builds still need hardware validation. The following upstream notes
 cover the target and external SDK/toolchain prerequisites.
 

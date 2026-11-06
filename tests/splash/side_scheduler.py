@@ -111,7 +111,7 @@ def check(image):
             side.poll(now)
         assert side.draws[-2:] == [1010, 1050]
     print('Actual RP2040 scheduler/timers/Layer renderer: 33/36 LEDs draw every 20 ms; burst MODE traffic postpones redraw but recovers 10 ms after burst ends')
-    print('Physical transport and driver remain outside this test; no permanent freeze reproduced')
+    print('Physical transport/driver remain outside this scheduler test; scheduler alone produces no permanent freeze')
 
 
 if __name__ == '__main__':

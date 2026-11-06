@@ -210,8 +210,10 @@ void SplashHeatmapPlugin::render() {
     leds_enabled_ = enabled;
     reset_sides();
   }
-  auto const &scanner = kaleidoscope::Runtime.device().keyScanner();
-  Devices current[2] = {scanner.leftHandDevice(), scanner.rightHandDevice()};
+  // The scanner's event-derived connection list can be UNKNOWN even while
+  // HAS_KEYS continues arriving. Query the same live transports used to send.
+  Devices current[2] = {Communications.connectedSideDevice(KEYSCANNER_DEFY_LEFT),
+                        Communications.connectedSideDevice(KEYSCANNER_DEFY_RIGHT)};
   for (uint8_t side = 0; side < 2; ++side) {
     if (current[side] != devices_[side]) {
       devices_[side] = current[side];

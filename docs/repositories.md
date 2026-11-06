@@ -18,6 +18,7 @@ Chipi-Chapa-Corp/
 │   ├── Communications/        submodule → DefyCommunications
 │   └── other dependencies     original upstream commits
 ├── DefyCommunications         branch: raise2-v1.5.0-splash
+│   ├── live transport route   select LEDs independently of stale scanner cache
 │   ├── Neuron packet filter   prevent competing LED packets entering queues
 │   └── side map handlers      source correction matching the blob patch
 └── raise2-side-patches         branch: main
