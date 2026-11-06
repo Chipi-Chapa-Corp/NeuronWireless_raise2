@@ -1,27 +1,23 @@
-// Overlapping splashes must never increase peak brightness after input stops.
-// RGB channels may rise as the QMK hue moves through green/cyan/blue.
+// Cold overlapping splashes must never brighten after all input stops.
 #include <cassert>
 #include <cstring>
 #include <iostream>
 #include <set>
-#include <algorithm>
 #include "SplashHeatmap.h"
 #include "color_reference.h"
 int main(int argc,char **) {
   unsigned rebounds=0, fading_samples=0;
   for(unsigned seed=1;seed<=20;++seed) {
     SplashHeatmap h;h.reset(0);unsigned rng=seed;
-    const unsigned history=argc>1?35:70;
-    for(unsigned n=0;n<history;++n) {
+    for(unsigned n=0;n<35;++n) {
       rng=rng*1664525u+1013904223u;unsigned row=(rng>>16)%5;
       rng=rng*1664525u+1013904223u;unsigned col=(rng>>16)%8;
       h.press(row,col,n*83);
     }
-    const unsigned origin=history*83+2000;h.tick(origin);
+    const unsigned origin=35*83+2000;h.tick(origin);
     std::set<unsigned> energies;
     for(unsigned led=0;led<33;++led) {
-      if(argc>1) assert(h.energy(0,led)<120*256);
-      energies.insert(h.energy(0,led));
+      assert(h.energy(0,led)<120*256);energies.insert(h.energy(0,led));
     }
     assert(energies.size()>15); // Exercise actual palette reduction.
     SplashHeatmap::Frame frame{};uint8_t previous[36][4]{};
@@ -30,7 +26,7 @@ int main(int argc,char **) {
       for(unsigned led=0;led<33;++led) {
         uint8_t rgb[4];post_gamma(frame.palette[frame.indices[led]],rgb);
         if(ms) {
-          rebounds+=(std::max({rgb[0],rgb[1],rgb[2]})>std::max({previous[led][0],previous[led][1],previous[led][2]}));
+          rebounds+=(rgb[0]>previous[led][0] || rgb[1]>previous[led][1]);
           ++fading_samples;
         }
         memcpy(previous[led],rgb,4);

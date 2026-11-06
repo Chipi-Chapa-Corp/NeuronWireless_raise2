@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify and package revision 15; never connect to a keyboard."""
+"""Verify and package revision 16; never connect to a keyboard."""
 from pathlib import Path
 import hashlib
 import importlib.util
@@ -12,7 +12,7 @@ import tempfile
 from intelhex import IntelHex
 
 root = Path(__file__).resolve().parents[1]
-out = root / 'build/install/splash-heatmap-v1.5.0-r15'
+out = root / 'build/install/splash-heatmap-v1.5.0-r16'
 app = IntelHex(str(root / 'build/release/NeuronWireless_raise2.hex'))
 final_path = root / 'build/release/NeuronWireless_raise2_final.hex'
 final = IntelHex(str(final_path))
@@ -28,7 +28,7 @@ assert all(final[a] == app[a] for a in app.addresses())
 assert all(final[a] == rf[a] for a in rf.addresses())
 sp, reset = struct.unpack('<II', bytes(app.tobinarray(start=0x2E000, size=8)))
 assert 0x20009400 <= sp <= 0x20020000 and reset & 1 and 0x2E000 <= reset < 0x70000
-assert b'v1.5.0-splash15' in bytes(app.tobinarray())
+assert b'v1.5.0-splash16' in bytes(app.tobinarray())
 for removed in (b'splash.stats', b'splash.transport', b'splash.refresh'):
     assert removed not in bytes(app.tobinarray()), 'Removed diagnostic command remains in firmware'
 
@@ -60,21 +60,21 @@ side = patcher.patch(stock)
 side_sha256 = hashlib.sha256(side).hexdigest()
 assert side_sha256 == '1bf7b886df75ef50ff0a0f5a410a3d53ae0c40bfa96aedd2e3e607da2ad0ebc7', 'Animation tuning must not change the working r2 side image'
 tests_log = (root / 'build/verification/tests.log').read_text()
-rgb_test = re.search(r'Actual plugin QMK single tap: (\d+) blue fade colors; visible span (\d+) ms; final black', tests_log)
-assert rgb_test and int(rgb_test.group(1)) >= 30 and 750 <= int(rgb_test.group(2)) <= 830
-hot_test = re.search(r'Actual plugin QMK saturated fade: (\d+) colors; red/green/cyan/blue present; no peak rebounds; final black', tests_log)
-assert hot_test and int(hot_test.group(1)) >= 200
+rgb_test = re.search(r'Actual plugin post-gamma RGB trace: (\d+) distinct single-tap colors', tests_log)
+assert rgb_test and int(rgb_test.group(1)) >= 25, 'Post-gamma RGB fade evidence missing'
+hot_test = re.search(r'Actual repeated-tap post-gamma RGB trace: (\d+) colors', tests_log)
+assert hot_test and int(hot_test.group(1)) >= 150, 'Repeated-tap post-gamma fade evidence missing'
 assert 'Actual RP2040 scheduler/timers/Layer renderer: 33/36 LEDs' in tests_log
 assert 'Released side radio disconnect packets: valid CRC, no false wired disconnect, continuing keys and cached LED routing passed' in tests_log
 assert 'BLE cache ownership: old implementation fails the regression as expected' in tests_log
 assert 'Wired notification boundary: old implementation fails the regression as expected' in tests_log
-assert 'QMK cooling: +32 heat, half-strength rings, -1 every 25 ms, single tap 800 ms, saturation 6375 ms; catch-up/reheat/rollover passed' in tests_log
-assert 'QMK HSV reference: all 256 heat levels match pinned upstream color.c; hot RGB peak 138, cold pure-blue fade, no cutoff' in tests_log
-assert 'Actual RP2040 Layer gamma/channel gains: all 256 RGB inputs match the compensation oracle' in tests_log
-renderer_tests = re.findall(r'Actual RP2040 QMK (single-tap|saturated) fade: (\d+) output colors; black at (\d+) ms; pure-blue ending; final level (\d+) ms', tests_log)
-assert len(renderer_tests) == 2 and all(20 <= int(row[3]) <= 60 for row in renderer_tests)
-assert {row[0]:int(row[2]) for row in renderer_tests} == {'single-tap':800, 'saturated':6380}
-assert 'Actual RP2040 QMK overlapping-splash fade: every key matches RGB oracle; no peak/channel reversals after peaks; cold pure-blue tail; final black' in tests_log
+assert 'Accelerating tail model: nominal shade delays 50,40,30,20,10,0 ms; 150 ms total; no terminal hold; reheating passed' in tests_log
+assert 'Dark-tail cutoff retained: energies 0..8 black; no faint G=1,3,4,6,7; blue/white zero' in tests_log
+ending_test = re.search(r'Actual plugin accelerating-tail packet timing: last green level (\d+); last level (\d+) ms; no faint green; final black', tests_log)
+assert ending_test and 10 <= int(ending_test.group(1)) <= 12 and 20 <= int(ending_test.group(2)) <= 60
+renderer_tests = re.findall(r'Actual RP2040 accelerating-tail (single-tap|saturated) fade: (\d+) output colors; last RGB \(0, 10, 0\) for (\d+) ms; no faint green; final black', tests_log)
+assert len(renderer_tests) == 2 and all(20 <= int(row[2]) <= 60 for row in renderer_tests)
+assert 'Actual RP2040 overlapping-splash fade: every key matches post-gamma RGB, no brightness reversals or red tail, final black' in tests_log
 assert 'Stable palette groups: 230340 post-gamma key samples fade without brightening reversals' in tests_log
 assert re.search(r'Original adaptive regrouping: [1-9]\d* post-gamma brightening reversals', tests_log)
 # Prepare all bytes only after image and stock-input/storage checks have passed.
@@ -82,7 +82,7 @@ out.mkdir(parents=True, exist_ok=True)
 (out / 'keyscanner.bin').write_bytes(side)
 shutil.copyfile(final_path, out / 'Wireless_neuron.hex')
 shutil.copyfile(root / 'docs/splash-heatmap.md', out / 'README.txt')
-for name in ('left-led-freeze.md', 'repositories.md', 'fade-stepping.md', 'input-profile-loss.md', 'tail-driver-investigation.md', 'qmk-heatmap.md'):
+for name in ('left-led-freeze.md', 'repositories.md', 'fade-stepping.md', 'input-profile-loss.md', 'tail-driver-investigation.md', 'accelerating-tail.md', 'r15-user-regressions.md'):
     shutil.copyfile(root / 'docs' / name, out / name)
 hashes = {f: sha(out / f) for f in ['Wireless_neuron.hex', 'keyscanner.bin']}
 (out / 'SHA256SUMS').write_text(''.join(f'{digest}  {name}\n' for name, digest in hashes.items()))
@@ -92,16 +92,16 @@ manifest = {
     'source_commit': subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
     'submodules': {line.split()[1]:line.split()[0] for line in
         subprocess.check_output(['git', '-C', str(root), 'submodule', 'status', '--recursive'], text=True).splitlines()},
-    'custom_version': 'v1.5.0-splash15',
+    'custom_version': 'v1.5.0-splash16',
     'hardware_tested': False,
     'hardware_recovery_tested': False,
     'previous_revision_hardware_report': 'r5: left LEDs frozen, right active; live status shows left route UNKNOWN, 44065 queued frames unchanged, last frame about 12 minutes old despite newer left key packets.',
     'observed_neuron_route_failure_confirmed': True,
     'event_that_cleared_scanner_route_confirmed': False,
     'previous_revision_user_reported_working': 'v1.5.0-splash2',
-    'installation_recommendation': 'Fix candidate for observed stale scanner route: suppress relabeled radio disconnects at the wired receiver and preserve wired cache entries on BLE disconnect. Splash uses the normal scanner cache. No periodic refresh or diagnostic counters. QMK heatmap cooling and HSV mapping replace the prior red/green envelope and cutoff. RGB gamma/gains are compensated at a shared attainable peak of 138. Half-strength rings and stable palette groups remain. New Neuron image is not hardware-tested; side binary unchanged.',
+    'installation_recommendation': 'Fix candidate for observed stale scanner route: suppress relabeled radio disconnects at the wired receiver and preserve wired cache entries on BLE disconnect. Splash uses the normal scanner cache. No periodic refresh or diagnostic counters. Gamma/channel compensation is retained. The r14 red/green effect is restored with nominal tail shade delays 50,40,30,20,10,0 ms; its faint-green cutoff is retained; stable palette groups prevent reproduced brightness reversals. New Neuron image is not hardware-tested; side binary unchanged.',
     'side_identical_to_revision_2': True,
-    'palette_strategy': 'Adaptive palette with membership retained between keypresses, up to 15 nonblack energy groups per half; inverse released gamma/RGB gains; no temporal dithering',
+    'palette_strategy': 'Adaptive palette with membership retained between keypresses, up to 15 nonblack energy groups per half; inverse released gamma/RG gains; no temporal dithering',
     'requires_patched_firmware_on_both_halves': True,
     'side_built_from_source': False,
     'side_method': 'Exact stock application binary patch: two four-byte instruction windows plus CRC fields',
@@ -119,25 +119,29 @@ manifest = {
         'emulated_same_mode_rearms':100,
         'exclusive_output_layer_mode_palette_reconnect_and_restore_tests':True,
         'full_hardware_or_flashing_test':False,
-        'qmk_reference_commit':'f5db962110615fd263c3ebf9f0402e7c2b08fbe4',
-        'qmk_hsv_matches_pinned_upstream_all_256_heat_values':True,
-        'tap_boost':32, 'neighbor_falloff_per_ring':0.5,
-        'frame_cap_fps':50,
-        'cooling_step':1, 'cooling_interval_ms':25,
-        'single_tap_nominal_duration_ms':800, 'saturated_nominal_duration_ms':6375,
-        'effect_rgb_ceiling':138,
-        'explicit_shade_holds':False, 'low_energy_cutoff':False,
+        'tap_boost':48, 'neighbor_falloff_per_ring':0.5,
+        'frame_cap_fps':50, 'high_energy_decay_half_life_ms_approx':1757,
+        'tail_nominal_shade_delays_ms':[50,40,30,20,10,0],
+        'tail_nominal_duration_ms':150,
+        'tail_curve':'linear decrease of per-shade delay',
+        'rounded_energy_blackout_through':8,
+        'skipped_final_green_pwm_levels':[1,3,4,6,7],
+        'zero_delay_terminal_shade_is_skipped':True,
+        'explicit_shade_holds':True,
+        'tail_schedule_restarts_at_50ms_for_shorter_tails':True,
+        'pre_qmk_animation_base_commit':'353ad90cb95368edf5c38d88b04b8fbe93d8010d',
+        'tail_model_tick_ms':10,
         'actual_renderer_single_tap_colors':int(dict((row[0],row[1]) for row in renderer_tests)['single-tap']),
         'actual_renderer_saturated_colors':int(dict((row[0],row[1]) for row in renderer_tests)['saturated']),
-        'actual_plugin_single_tap_visible_span_ms':int(rgb_test.group(2)),
-        'actual_renderer_final_blue_level_duration_ms':{row[0]:int(row[3]) for row in renderer_tests},
+        'actual_plugin_last_green_level':int(ending_test.group(1)),
+        'actual_plugin_last_level_ms':int(ending_test.group(2)),
         'sub_minimum_pwm_levels_added':False,
-        'actual_gamma_transfer_all_256_rgb_inputs_verified':True,
+        'actual_gamma_transfer_all_256_red_green_inputs_verified':True,
         'physical_red_tail_cause_confirmed':False,
         'palette_membership_stable_between_new_keypresses':True,
         'post_gamma_no_brightening_key_samples':230340,
         'legacy_palette_regrouping_reversals_reproduced':True,
-        'adaptive_palette_and_nonincreasing_peak_brightness_tests':True,
+        'adaptive_palette_and_monotone_rgb_fade_tests':True,
         'distinct_single_tap_post_gamma_rgb_colors':int(rgb_test.group(1)),
         'distinct_repeated_tap_post_gamma_rgb_colors':int(hot_test.group(1)),
         'periodic_palette_map_refresh_ms':0,

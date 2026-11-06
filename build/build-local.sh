@@ -16,5 +16,5 @@ PY
 fi
 python "$root/tests/splash/check.py" | tee "$build_dir/verification/tests.log"
 make -C "$build_dir" clean
-make -C "$build_dir" -j4 release RAISE2_FW_VERSION=v1.5.0-splash15 > "$build_dir/verification/build.log" 2>&1
+make -C "$build_dir" -j4 release RAISE2_FW_VERSION=v1.5.0-splash16 > "$build_dir/verification/build.log" 2>&1
 python "$build_dir/package-local.py"

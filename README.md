@@ -1,20 +1,18 @@
 # Raise 2 Splash/Heatmap firmware
 
-**r15 was rejected in hardware testing** for worse color stepping, noticeable
-latency and more red tint. Its earlier software checks do not establish a good
-physical result. See [the regression investigation](docs/r15-user-regressions.md).
+Custom Neuron firmware based on **Dygma Raise 2 1.5.0**. Revision 16 retries the
+pre-QMK r14 red/green effect with dimming-step delays decreasing linearly from
+50 ms to zero. It retains +48 heating, half-strength neighbor rings, the faint
+green cutoff, stable palette groups and the original R/G compensation.
+The transport, notification fixes and existing side allocation patch remain.
+No new side patch, periodic refresh or runtime diagnostics are included.
 
-Custom Neuron firmware based on **Dygma Raise 2 1.5.0**, with additive splash
-rings, smooth adaptive RGB fading and exclusive LED ownership across layer changes.
-Revision 15 uses QMK Typing Heatmap's cooling and HSV mapping: blue at low
-heat, then cyan, green, yellow and red as typing accumulates. It retains
-half-strength neighbor rings and stable palette groups, compensates all three
-RGB channels through the released side renderer, and keeps the existing
-notification fixes. No periodic refresh or diagnostic telemetry is added.
-The side application still needs the existing allocation patch; it is not
-rebuilt from source and has no new binary change for this revision.
+r15 was rejected on hardware for worse steps, lag and red tint. See
+[the investigation](docs/r15-user-regressions.md). r16 is a new timing candidate,
+not a verified fix for those physical symptoms.
 
-- [QMK algorithm, adaptation and verification](docs/qmk-heatmap.md)
+- [r16 timing, scope and tests](docs/accelerating-tail.md)
+- [Rejected QMK trial](docs/qmk-heatmap.md)
 - [Build, install, enable and rollback](docs/splash-heatmap.md)
 - [End-of-fade driver investigation and optional anti-ghost test](docs/tail-driver-investigation.md)
 - [Fade stepping: cause, renderer tests and limits](docs/fade-stepping.md)
@@ -28,7 +26,7 @@ git -c url.https://github.com/.insteadOf=git@github.com: clone   --branch raise2
 ```
 
 The main custom build command is `bash build/build-local.sh`. It runs software
-checks and creates `build/install/splash-heatmap-v1.5.0-r15`; it never flashes.
+checks and creates `build/install/splash-heatmap-v1.5.0-r16`; it never flashes.
 New Neuron builds still need hardware validation. The following upstream notes
 cover the target and external SDK/toolchain prerequisites.
 

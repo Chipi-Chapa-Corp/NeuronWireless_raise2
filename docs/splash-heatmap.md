@@ -1,43 +1,39 @@
-# Raise 2 Splash/Heatmap — revision 15
+# Raise 2 Splash/Heatmap — revision 16
 
-**r15 is not recommended:** the user reports worse steps, latency and red tint.
-See [the investigation](r15-user-regressions.md). Software results below are not
-hardware acceptance. Earlier packages remain available for rollback.
+This fork is based on the exact `Raise2_v1.5.0` release. Revision 16 restores the
+pre-QMK r14 red/green animation and changes the low-energy dimming-step waits
+from a fixed/linear-energy tail to linearly decreasing delays. The full six-shade
+tail uses **50, 40, 30, 20, 10, 0 ms**. Each shorter tail also starts at 50 ms
+and decreases to zero; the model quantizes nonmultiples up to its 10 ms clock.
+The terminal zero-delay shade is skipped during fading.
 
-This fork is based on the exact `Raise2_v1.5.0` release. Revision 15 adapts
-QMK Typing Heatmap's default heating, linear cooling and HSV color mapping.
-A single press starts blue; continued typing adds heat through cyan, green,
-yellow and red. During cooling, hot colors keep full effect value, then blue
-fades to black. The earlier red/green envelope and low-energy cutoff are removed.
-See [the QMK source, adaptation and verification](qmk-heatmap.md).
+The original +48 heating, R/G compensation, high-energy exponential decay and
+faint-green cutoff remain. Blue/white output is zero. The QMK mapping and its
+138 RGB ceiling are removed. See [the timing experiment and limits](accelerating-tail.md).
+The ordinary side binary remains unchanged; no new binary patch is included.
 
-The effect's RGB ceiling is 138 because the stock side renderer attenuates blue.
-All three channels are compensated within that common attainable range; the
-existing Bazecor global brightness setting still applies afterwards. This is
-not a photometric calibration or proof that the earlier physical red tint is
-gone. The ordinary r15 side image is unchanged from r14; the optional r12
-anti-ghost experiment remains separate.
+r15 was rejected on hardware for worse stepping, latency and red tint. r16 is
+an untested candidate for the user's requested earlier-animation retry. It does
+not establish that these physical issues are solved. See [the r15 findings](r15-user-regressions.md).
 
 Revision 9's notification fixes are retained: forwarded wireless disconnects
 cannot erase a live wired route. Splash uses the normal scanner connection cache;
 revision 8's bypass APIs remain removed. There are no diagnostic counters,
 periodic refreshes, temporal dithering, or additional side binary changes.
 
-The Neuron image passed software checks but was subsequently rejected in
-physical testing for worse lighting behavior. Existing r5 status was read while the real fault was present;
+The new Neuron candidate has software checks but has not yet been tested on
+the physical keyboard. Existing r5 status was read while the real fault was present;
 no LED commands, resets or flashing were performed. See [the captured evidence
 and regression tests](left-led-freeze.md).
 
 ## Animation
 
-- Each tap adds 32/255 heat immediately. Repeated taps add up to saturation.
-- Neighbor rings receive half the preceding ring's heat: 16, 8, 4, 2, 1,
-  then fractional amounts. Diagonal neighbors are included. Splash stays within
-  each half; thumb keys use an approximate lower visual row.
-- Every 25 ms, all keys lose one heat unit. A single center cools in about
-  0.8 seconds; a saturated center in about 6.375 seconds. There is no exponential
-  decay, low-end cutoff or additional shade-hold timer. Global brightness can
-  merge physical PWM levels; timing tests cover output before that final scaling.
+- Each tap adds 48/255 heat. Neighbor rings receive half: 24, 12, 6, 3,
+  then fractional heat. The r14 cutoff hides rounded energies 0..8.
+- High heat decays every 10 ms with an approximately 1.757-second half-life.
+  Below about 16/255, per-shade delays decrease linearly from 50 ms to zero.
+  New heat resets the affected tail timer. The six-shade tail has 150 ms of
+  nominal waits; it does not replace or shorten the earlier high-energy decay.
 - Frames are capped at 50 fps. Each half gets an adaptive RGB palette with up to
   15 nonblack colors. An isolated splash fits exactly; busy overlapping splashes
   may merge nearby energy levels. Their group memberships remain fixed during
@@ -90,11 +86,11 @@ The script runs input, animation, ownership, transport and side-instruction test
 then builds and verifies the installable package. Logs are in `build/verification`.
 Select this exact folder in Bazecor's custom firmware folder picker:
 
-    build/install/splash-heatmap-v1.5.0-r15
+    build/install/splash-heatmap-v1.5.0-r16
 
 It contains `Wireless_neuron.hex`, `keyscanner.bin`, `SHA256SUMS`, a manifest and
 this README. The Neuron is rebuilt from source. The side image is the SAME image
-as revisions 2 through 14; already patched halves do not require a different side
+as revisions 2 through 15; already patched halves do not require a different side
 image. Bazecor compares side application CRCs during its normal upgrade process.
 No automatic flashing is performed by the build scripts.
 

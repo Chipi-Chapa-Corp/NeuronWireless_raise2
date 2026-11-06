@@ -5,87 +5,133 @@
 #include <fstream>
 #include "SplashHeatmap.h"
 #include "color_reference.h"
-#include "color.h"
-#include <algorithm>
 using namespace Communications_protocol;
 int main(int argc,char **argv) {
   SplashHeatmap heat;
   static_assert(SplashHeatmap::frame_ms == 20, "50 fps frame cap");
   heat.reset(0);heat.press(0,0,5);
-  assert(heat.value(0,0)==32);
-  assert(heat.value(0,1)==16 && heat.value(0,8)==16);
-  assert(heat.value(0,2)==8 && heat.value(0,15)==8);
-  assert(heat.value(0,3)==4 && heat.value(0,4)==2);
-  assert(heat.energy(0,5)==256 && heat.energy(0,6)==128);
+  assert(heat.value(0,0)==48);
+  assert(heat.value(0,1)==24 && heat.value(0,8)==24);
+  assert(heat.value(0,2)==12 && heat.value(0,15)==12);
+  assert(heat.value(0,3)==6 && heat.value(0,4)==3);
+  assert(heat.energy(0,5)==384 && heat.energy(0,6)==192);
   for(unsigned i=0;i<36;++i) assert(heat.energy(1,i)==0);
-  heat.press(0,0,5);assert(heat.value(0,0)==64 && heat.value(0,1)==32);
-  for(unsigned i=0;i<6;++i) heat.press(0,0,5);
-  assert(heat.value(0,0)==255 && heat.value(0,1)==128);
+  heat.press(0,0,5);assert(heat.value(0,0)==96 && heat.value(0,1)==48);
+  heat.press(0,0,5);assert(heat.value(0,0)==144 && heat.value(0,1)==72);
+  for(unsigned i=0;i<3;++i) heat.press(0,0,5);
+  assert(heat.value(0,0)==255 && heat.value(0,1)==144);
 
-  // Fixed cooling law, batched catch-up, long gaps and uint32 clock rollover.
-  heat.reset(0);heat.press(0,0,0);heat.tick(24);assert(heat.value(0,0)==32);
-  heat.tick(25);assert(heat.value(0,0)==31);
-  heat.tick(400);assert(heat.value(0,0)==16);
-  heat.tick(799);assert(heat.value(0,0)==1);
-  heat.tick(800);assert(heat.energy(0,0)==0);
-  heat.press(0,15,800);assert(heat.value(1,0)==32 && heat.value(0,0)==0);
-  heat.press(65535,65535,800);assert(heat.value(1,0)==32);
-  for(unsigned i=0;i<8;++i) heat.press(0,15,800);
-  assert(heat.value(1,0)==255);heat.tick(7174);assert(heat.value(1,0)==1);
-  heat.tick(7175);assert(heat.energy(1,0)==0);
-  heat.reset(UINT32_MAX-24);heat.press(0,0,UINT32_MAX-24);heat.tick(0);
-  assert(heat.value(0,0)==31);heat.tick(UINT32_MAX-25);assert(heat.energy(0,0)==0);
-  heat.reset(0);heat.press(0,0,0);heat.tick(250);assert(heat.value(0,0)==22);
-  heat.press(0,0,250);assert(heat.value(0,0)==54);heat.tick(275);assert(heat.value(0,0)==53);
-  heat.reset(0);heat.press(4,5,0);
-  assert(heat.value(0,31)==32 && heat.value(0,32)==16);
-  assert(heat.value(0,30)==16 && heat.value(0,29)==16 && heat.value(0,26)==2);
-  std::cout<<"QMK cooling: +32 heat, half-strength rings, -1 every 25 ms, single tap 800 ms, saturation 6375 ms; catch-up/reheat/rollover passed\n";
+  heat.reset(0);heat.press(0,0,5);heat.tick(10);
+  assert(heat.energy(0,0)>=12238 && heat.energy(0,0)<=12240);
+  heat.tick(1750);assert(heat.value(0,0)>=23 && heat.value(0,0)<=25);
+  heat.tick(6500);assert(heat.energy(0,0)==0);
+  heat.tick(12000);assert(heat.energy(0,0)==0);
+  heat.press(0,15,12000);assert(heat.value(1,0)==48 && heat.value(0,0)==0);
+  heat.press(0,8,12000);heat.press(65535,65535,12000);
+  assert(heat.value(1,0)==48);
+  for(unsigned i=0;i<100;++i) heat.press(0,15,12000);
+  assert(heat.value(1,0)==255);
+  heat.reset(UINT32_MAX-9);heat.press(0,0,UINT32_MAX-9);heat.tick(0);
+  assert(heat.energy(0,0)>=12238 && heat.energy(0,0)<=12240);
+  heat.tick(UINT32_MAX-10);assert(heat.energy(0,0)==0);
 
-  // Compare all 256 heat levels with the unmodified pinned QMK color.c,
-  // using its heatmap HSV equation and scale8 at the shared effect ceiling.
-  for(unsigned level=0;level<=255;++level) {
-    hsv_t hsv{};hsv.h=170-(level>85?level-85:0);hsv.s=255;
-    hsv.v=(std::min(level,85u)*3*(SplashColor::common_max+1))>>8;
-    rgb_t expected=hsv_to_rgb_nocie(hsv);
-    uint8_t linear[4],raw[4],actual[4];
-    SplashHeatmap::color_linear(level*256,linear);
-    assert(linear[0]==expected.r && linear[1]==expected.g && linear[2]==expected.b && linear[3]==0);
-    SplashHeatmap::color_energy(level*256,raw);post_gamma(raw,actual);
-    if(level>=85) assert(std::max({actual[0],actual[1],actual[2]})==SplashColor::common_max);
-    if(level<=85) assert(actual[0]==0 && actual[1]==0 && actual[3]==0);
-    if(level==0) assert(actual[2]==0);
-    if(level==32) assert(actual[2]>=50 && actual[2]<=54);
-    if(level==85) assert(actual[2]==138);
-    if(level==170) assert(actual[1]==138 && actual[0]==0 && actual[2]==0);
-    if(level==255) assert(actual[0]==138 && actual[1]==0 && actual[2]==0);
+  // Compare r5 decay at five times the elapsed time against r4's exact law.
+  heat.reset(0);for(unsigned i=0;i<6;++i) heat.press(0,0,0);
+  uint32_t old_energy=255*256;
+  for(unsigned step=1;step<=300;++step) {
+    old_energy=old_energy*251/256;
+    heat.tick(step*50);
+    int difference=static_cast<int>(heat.energy(0,0))-static_cast<int>(old_energy);
+    if (old_energy > 17*256) assert(difference>-256 && difference<256);
   }
-  std::cout<<"QMK HSV reference: all 256 heat levels match pinned upstream color.c; hot RGB peak 138, cold pure-blue fade, no cutoff\n";
+  heat.reset(0);heat.press(4,5,0);
+  assert(heat.value(0,31)==48 && heat.value(0,32)==24);
+  assert(heat.value(0,30)==24 && heat.value(0,29)==24 && heat.value(0,26)==3);
 
-  std::set<uint32_t> shades,hot_shades;
+  // Check actual emitted RGB, not time-averaged palette indices. A single
+  // splash must fade through many real colors without alternating fixed shades.
+  heat.reset(0);heat.press(0,0,0);
+  std::set<uint32_t> shades;
   uint8_t previous_rgb[4]{};
   SplashHeatmap::Frame frame{},repeat{};
-  for(unsigned scenario=0;scenario<2;++scenario) {
-    heat.reset(0);for(unsigned i=0;i<(scenario?8u:1u);++i) heat.press(0,0,0);
-    memset(previous_rgb,0,4);
-    for(unsigned ms=0;ms<=7000;ms+=20) {
-      heat.tick(ms);heat.make_frame(0,33,frame);heat.make_frame(0,33,repeat);
-      assert(memcmp(&frame,&repeat,sizeof(frame))==0);
-      for(unsigned i=0;i<33;++i) {
-        uint8_t expected[4];SplashHeatmap::color_energy(heat.energy(0,i),expected);
-        assert(frame.indices[i]<16);
-        assert(memcmp(frame.palette[frame.indices[i]],expected,4)==0);
-      }
-      uint8_t rgb[4];post_gamma(frame.palette[frame.indices[0]],rgb);
-      (scenario?hot_shades:shades).insert((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);
-      if(ms) assert(std::max({rgb[0],rgb[1],rgb[2]})<=std::max({previous_rgb[0],previous_rgb[1],previous_rgb[2]}));
-      if(!scenario) assert(rgb[0]==0 && rgb[1]==0);
-      memcpy(previous_rgb,rgb,4);
+  for(unsigned ms=0;ms<=12000;ms+=20) {
+    heat.tick(ms);heat.make_frame(0,33,frame);heat.make_frame(0,33,repeat);
+    assert(memcmp(&frame,&repeat,sizeof(frame))==0);
+    for(unsigned i=0;i<33;++i) {
+      uint8_t expected[4];SplashHeatmap::color_energy(heat.energy(0,i),expected);
+      assert(frame.indices[i]<16);
+      assert(memcmp(frame.palette[frame.indices[i]],expected,4)==0);
     }
-    assert(previous_rgb[0]==0 && previous_rgb[1]==0 && previous_rgb[2]==0);
+    uint8_t rgb[4];post_gamma(frame.palette[frame.indices[0]],rgb);
+    shades.insert((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);
+    if(ms) for(unsigned channel=0;channel<4;++channel) {
+      int delta=static_cast<int>(rgb[channel])-previous_rgb[channel];
+      assert((delta>=-2 && delta<=2) || (rgb[0]==0 && rgb[1]==0 && previous_rgb[0]<=1 && previous_rgb[1]<=12));
+    }
+    memcpy(previous_rgb,rgb,4);
   }
-  assert(shades.size()>=30 && hot_shades.size()>=180);
-  std::cout<<"QMK model fade: "<<shades.size()<<" single-tap colors; "<<hot_shades.size()<<" saturated colors; no peak-brightness rebounds; final black\n";
+  assert(shades.size()>=23);
+  std::cout<<"Single-tap post-gamma RGB fade: "<<shades.size()<<" distinct displayed colors, <=2/255 channel change per 20 ms except deliberate trimmed-tail cutoff\n";
+  assert(previous_rgb[0]==0 && previous_rgb[1]==0);
+
+  // Repeated taps saturate the center, but its fade still has many RGB steps.
+  heat.reset(0);for(unsigned i=0;i<20;++i) heat.press(0,0,0);
+  std::set<uint32_t> hot_shades;
+  memset(previous_rgb,0,4);
+  for(unsigned ms=0;ms<=17000;ms+=20) {
+    heat.tick(ms);heat.make_frame(0,33,frame);
+    uint8_t rgb[4];post_gamma(frame.palette[frame.indices[0]],rgb);
+    hot_shades.insert((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);
+    if(ms) for(unsigned c=0;c<4;++c) {
+      int delta=static_cast<int>(rgb[c])-previous_rgb[c];
+      assert((delta>=-5 && delta<=5) || (rgb[0]==0 && rgb[1]==0 && previous_rgb[0]<=1 && previous_rgb[1]<=12));
+    }
+    memcpy(previous_rgb,rgb,4);
+  }
+  assert(hot_shades.size()>=160);
+  std::cout<<"Repeated-tap post-gamma fade: "<<hot_shades.size()<<" RGB colors, <=5/255 channel change per 20 ms except deliberate trimmed-tail cutoff\n";
+
+  // The last pre-QMK tail has six realizable shades. Their delays must
+  // decrease linearly; the zero-delay terminal shade is never held by tick().
+  const unsigned energies[]={16,15,14,12,11,9,8};
+  const unsigned waits[]={50,40,30,20,10,0,0};
+  for(unsigned n=0;n<7;++n) assert(SplashHeatmap::tail_delay_ms(energies[n]*256)==waits[n]);
+  assert(SplashHeatmap::tail_delay_ms(255*256)==50);
+  assert(SplashHeatmap::remaining_tail_shades(12*256)==3);
+  assert(SplashHeatmap::tail_delay_ms(12*256,3)==50);
+  assert(SplashHeatmap::tail_delay_ms(11*256,3)==25);
+  assert(SplashHeatmap::tail_delay_ms(9*256,3)==0);
+  heat.reset(0);heat.press(1,1,0);
+  unsigned previous_color=0,entered=0,phase=0,tail_total=0;bool in_tail=false;
+  for(unsigned ms=0;ms<=6000;ms+=10) {
+    heat.tick(ms);heat.make_frame(0,33,frame);
+    uint8_t rgb[4];post_gamma(frame.palette[frame.indices[8]],rgb);
+    unsigned color=(rgb[0]<<16)|(rgb[1]<<8)|rgb[2];
+    if(!in_tail && heat.energy(0,8)<=16*256+127) {
+      in_tail=true;entered=ms;previous_color=color;
+    }
+    if(in_tail && color!=previous_color) {
+      const unsigned expected_colors[]={0x021000,0x010f00,0x010d00,0x010c00,0x000a00};
+      if(phase<5 && previous_color==expected_colors[phase]) {
+        unsigned hold=ms-entered;assert(hold==waits[phase]);tail_total+=hold;++phase;
+      }
+      assert(color!=0x000900); // Zero-delay terminal shade consumed immediately.
+      entered=ms;previous_color=color;
+    }
+  }
+  assert(phase==5 && tail_total==150);
+  heat.reset(0);heat.press(0,0,0);heat.tick(20);
+  unsigned before_reheat=heat.energy(0,2);
+  heat.press(0,0,20);assert(heat.energy(0,2)==before_reheat+12*256);
+  assert(heat.energy(0,2)>16*256);heat.tick(30);assert(heat.energy(0,2)>16*256);
+  std::cout<<"Accelerating tail model: nominal shade delays 50,40,30,20,10,0 ms; 150 ms total; no terminal hold; reheating passed\n";
+
+  for(unsigned level=0;level<=255;++level) {
+    uint8_t raw[4],actual[4];SplashHeatmap::color_energy(level*256,raw);post_gamma(raw,actual);
+    assert(!(actual[0]==0 && actual[1]>0 && actual[1]<=7));
+    if(level<=8) for(auto channel:actual) assert(channel==0);
+  }
+  std::cout<<"Dark-tail cutoff retained: energies 0..8 black; no faint G=1,3,4,6,7; blue/white zero\n";
 
   // Busy overlapping splashes still fit the shared per-half palette, without
   // out-of-range indices, heap allocation, or nondeterministic dither phases.
@@ -154,7 +200,7 @@ int main(int argc,char **argv) {
   assert(rgba[0] == 0 && rgba[1] == 0 && rgba[2] == 0 && rgba[3] == 0);
   SplashHeatmap::color_energy(255*256u, rgba);
   uint8_t corrected[4];post_gamma(rgba,corrected);
-  assert(corrected[0] == 138 && corrected[1] == 0 && rgba[2] == 0 && rgba[3] == 0);
+  assert(corrected[0] == 255 && corrected[1] == 1 && rgba[2] == 0 && rgba[3] == 0);
 
   std::cout << "Heatmap model and packet encoding passed\n";
 }

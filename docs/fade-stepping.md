@@ -1,11 +1,10 @@
-# Fade investigation and current QMK heatmap: revision 15
+# Fade investigation: revision 16 retries pre-QMK timing
 
-Revision 15 replaces the earlier red/green color and decay experiments below
-with QMK Typing Heatmap's default cooling and HSV mapping, including cyan/blue.
-The low-green cutoff and special tail envelope are removed. Current behavior,
-source attribution, RGB compensation and tests are documented in
-[qmk-heatmap.md](qmk-heatmap.md). The following sections preserve the history
-and evidence for revisions 9–14; their timings are not revision 15's behavior.
+Revision 16 restores the pre-QMK r14 red/green mapping and changes per-shade
+tail waits to decrease linearly from 50 ms to zero. Current scope, timings and
+limits are in [accelerating-tail.md](accelerating-tail.md). The QMK r15 trial was
+rejected on hardware; see [the findings](r15-user-regressions.md). The following
+sections preserve historical experiments and are not r16's timing specification.
 
 The user reported roughly one-second dim-color batches and a shallow red tail
 on a build preceding r9. Revision 9 changed notification handling only; it did
