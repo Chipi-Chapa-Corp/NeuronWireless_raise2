@@ -139,9 +139,12 @@ int main(int argc,char **argv) {
   size_t draw_start=draws.size();step(12000);
   std::set<unsigned> colors;
   uint8_t previous[4]{};unsigned previous_time=0;
+  std::vector<std::pair<unsigned,unsigned>> color_runs;
   for(size_t i=draw_start;i<draws.size();++i) {
     const auto &draw=draws[i];if(draw.side) continue;
     colors.insert((draw.rgb[0]<<16)|(draw.rgb[1]<<8)|draw.rgb[2]);
+    if(color_runs.empty() || color_runs.back().second!=draw.rgb[1])
+      color_runs.push_back({draw.time,draw.rgb[1]});
     if(previous_time) {
       assert(draw.time-previous_time>=SplashHeatmap::frame_ms);
       for(unsigned channel=0;channel<4;++channel) {
@@ -151,6 +154,15 @@ int main(int argc,char **argv) {
     }
     memcpy(previous,draw.rgb,4);previous_time=draw.time;
   }
+  unsigned holds=0;
+  for(size_t i=0;i+1<color_runs.size();++i) {
+    if(color_runs[i].second>0 && color_runs[i].second<=7) {
+      unsigned duration=color_runs[i+1].first-color_runs[i].first;
+      assert(duration>=220 && duration<=280);++holds;
+    }
+  }
+  assert(holds==5);
+  std::cout<<"Actual plugin dim-tail packet timing: five equal holds within 250 +/- 30 ms\n";
   assert(colors.size()>=30);
   std::cout<<"Actual plugin post-gamma RGB trace: "<<colors.size()<<" distinct single-tap colors, monotone fade, <=3/255 channel steps\n";
 

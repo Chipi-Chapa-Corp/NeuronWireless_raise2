@@ -11,31 +11,38 @@
 class SplashHeatmap {
  public:
   enum { rows = 5, cols = 8, no_led = 255, max_leds = 36, frame_ms = 20,
-         tap_boost = 48, decay_ms = 10 };
+         tap_boost = 48, decay_ms = 10, tail_hold_ms = 250 };
 
   void reset(uint32_t now) {
     memset(heat_, 0, sizeof(heat_));
+    memset(tail_ticks_, 0, sizeof(tail_ticks_));
     last_decay_ = now;
   }
 
   void tick(uint32_t now) {
     uint32_t steps = (now - last_decay_) / decay_ms;
     if (!steps) return;
-    for (auto &side : heat_)
-      for (auto &value : side) {
-        // Q8 energy keeps the dim tail from falling through integer steps.
-        // (251/256)^(1/5), rounded to Q16: five times slower than r4,
-        // with the same 10 ms time resolution rather than larger fade steps.
-        if (steps >= 5000) value = 0;
-        else for (uint32_t i = 0; i < steps && value; ++i) {
-          uint16_t next = static_cast<uint32_t>(value) * 65278 / 65536;
-          // Keep the long exponential fade at normal energy, then use a
-          // linear tail below ~16/255. Last RGB levels must not linger a second.
-          uint16_t loss = value - next;
-          if (loss < 16) loss = 16;  // Q8: one target unit per 160 ms.
-          value = value > loss ? value - loss : 0;
+    for (uint8_t side = 0; side < 2; ++side) {
+      for (uint8_t index = 0; index < max_leds; ++index) {
+        auto &value = heat_[side][index];
+        auto &tail_ticks = tail_ticks_[side][index];
+        if (steps >= 5000) { value = 0; tail_ticks = 0; continue; }
+        for (uint32_t i = 0; i < steps && value; ++i) {
+          if (value <= 16 * 256 + 127) {
+            // Below 16/255, hold each distinct post-gamma color for the same
+            // 250 ms. Counting raw RGB units would give unequal visible holds.
+            if (++tail_ticks >= tail_hold_ms / decay_ms) {
+              value = previous_tail_energy(value);
+              tail_ticks = 0;
+            }
+          } else {
+            // Retain the earlier exponential fade (about 1.757 s half-life).
+            value = static_cast<uint32_t>(value) * 65278 / 65536;
+            tail_ticks = 0;
+          }
         }
       }
+    }
     last_decay_ += steps * decay_ms;
   }
 
@@ -62,6 +69,7 @@ class SplashHeatmap {
         uint8_t distance = dr > dc ? dr : dc;
         uint32_t value = heat_[side][index] + ((tap_boost * 256u) >> distance);
         heat_[side][index] = value > 255 * 256u ? 255 * 256u : value;
+        tail_ticks_[side][index] = 0;
       }
     }
   }
@@ -198,6 +206,19 @@ class SplashHeatmap {
   }
 
  private:
+  static uint16_t previous_tail_energy(uint16_t heat) {
+    uint8_t current[4], next[4];
+    color_energy(heat, current);
+    uint16_t value = (static_cast<uint32_t>(heat) + 128) / 256;
+    while (value) {
+      --value;
+      color_energy(value * 256, next);
+      if (memcmp(current, next, sizeof(current)) != 0) return value * 256;
+    }
+    return 0;
+  }
+
+  uint8_t tail_ticks_[2][max_leds] = {};
   uint16_t heat_[2][max_leds] = {};
   uint32_t last_decay_ = 0;
 };

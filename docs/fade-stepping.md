@@ -1,4 +1,4 @@
-# Fade stepping: revision 10
+# Fade correction and equal holds: revision 11
 
 The user reported roughly one-second dim-color batches and a shallow red tail
 on a build preceding r9. Revision 9 changed notification handling only; it did
@@ -33,10 +33,13 @@ image, reads the gamma LUT at `0x100267a4` and the R/G float32 gains at
 `0x10012f68` / `0x10012f60`, then selects the closest realizable output. Black maps
 to zero. The build verifies the generated header; it never modifies the side.
 
-At ordinary energy the existing decay law is unchanged. The minimum decrement
-is now 16 Q8 units per 10 ms: below about 16/255, decay becomes linear instead of
-holding the final quantized levels for a long exponential tail. Tap energy,
-splash rings, frame pacing and the user's brightness configuration stay the same.
+At ordinary energy the existing decay law is unchanged. Revision 10 used a
+linear tail, which reduced the final holds to alternating 160/320 ms intervals.
+Revision 11 instead holds each distinct realizable dim color for 250 ms, skipping
+raw RGB values that produce the same output. This begins below about 16/255.
+Each key has its own hold phase; a new tap adds heat and restarts the affected
+hold. Tap energy, splash rings, frame pacing and brightness configuration stay
+the same.
 This makes low-energy taps brighter: their brightness is no longer unintentionally
 crushed by another gamma conversion.
 
@@ -49,9 +52,10 @@ outputs after gamma. The actual Neuron plugin's packet stream is separately
 checked using the oracle verified by that execution.
 
 The corrected isolated fade has **32 output colors** including black; the
-saturated fade has **169**. The dim tail's unchanged-color holds are at most
-**320 ms** at this stage. Single taps reach black at about 5.2 seconds and
-saturated keys at about 9.4 seconds. There are no new periodic refreshes,
+saturated fade has **169**. The final green levels **7, 6, 4, 3, 1** each hold for **250 ms** on the model's
+10 ms clock. Replaying at 50 fps measures **240–260 ms** holds; the actual
+Neuron plugin packet trace must remain within 250 +/- 30 ms. New taps interrupt
+the fade, and busy palette clustering can merge nearby levels. There are no new periodic refreshes,
 diagnostics, temporal dithering or side instruction patches. Input and storage
 baseline checks and r9's notification regressions remain required.
 
