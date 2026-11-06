@@ -88,6 +88,12 @@ as revisions 2 through 10; already patched halves do not require a different sid
 image. Bazecor compares side application CRCs during its normal upgrade process.
 No automatic flashing is performed by the build scripts.
 
+After flashing, ensure Bazecor has restored your saved configuration and verify
+your usual key actions before enabling Splash. A completed firmware upload does
+not establish that profile restoration succeeded. An observed Bazecor reconnect
+failure left all custom keys erased and selected the built-in layout; turning
+Splash off could not repair that state. See [the profile-loss investigation](input-profile-loss.md).
+
 After installation, close Bazecor's serial connection and run:
 
 ```bash
@@ -95,6 +101,17 @@ python tools/splash.py on
 python tools/splash.py status
 python tools/splash.py off
 ```
+
+To check the input configuration against a known-good Bazecor backup before
+enabling Splash, use:
+
+```bash
+python tools/splash.py on --verify-backup /path/to/your/Bazecor-backup.json
+```
+
+This compares the saved keymap, custom-layer selection, default layer, superkeys
+and macros. A mismatch stops this invocation before it enables Splash. It does
+not restore or change those settings; `off` remains available independently.
 
 The helper sends a command and exits. Animation runs on the keyboard's Neuron.
 Splash starts disabled after a power cycle. The helper checks `splash.protocol == 2`

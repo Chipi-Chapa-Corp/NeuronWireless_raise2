@@ -2,6 +2,8 @@
 """Send only the custom splash command; never flash or edit a keymap."""
 import argparse
 import glob
+import json
+from pathlib import Path
 import os
 import select
 import sys
@@ -11,7 +13,25 @@ import time
 parser = argparse.ArgumentParser()
 parser.add_argument('action', choices=['on', 'off', 'status'])
 parser.add_argument('--port', help='Keyboard serial port; otherwise find one Raise2 in /dev/serial/by-id')
+parser.add_argument('--verify-backup', type=Path,
+                    help='Before on/status, compare the saved input profile with a Bazecor backup')
 args = parser.parse_args()
+profile_commands = ('keymap.custom', 'keymap.onlyCustom', 'settings.defaultLayer',
+                    'superkeys.map', 'macros.map')
+expected_profile = None
+if args.verify_backup:
+    if args.action == 'off':
+        parser.error('--verify-backup is for on/status; off always remains available')
+    try:
+        backup = json.loads(args.verify_backup.read_text())
+        values = {entry['command']: entry['data'] for entry in backup['backup']}
+        if not all(isinstance(values[command], str) for command in profile_commands):
+            raise ValueError('profile components must be strings')
+        expected_profile = {command: values[command].split() for command in profile_commands}
+        if not all(expected_profile.values()):
+            raise ValueError('empty input-profile component')
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        parser.error(f'Cannot read the Bazecor input-profile backup: {error}')
 ports = [p for p in glob.glob('/dev/serial/by-id/*') if 'raise2' in p.lower()]
 if not args.port and len(ports) != 1:
     parser.error('Specify --port: exactly one Raise2 serial port could not be identified.')
@@ -45,6 +65,12 @@ try:
     termios.tcflush(fd, termios.TCIFLUSH)
     if request(b'splash.protocol\n') != [b'2']:
         raise RuntimeError('This helper requires v1.5.0-splash2 with patched side firmware; it will not enable the retired build.')
+    if expected_profile:
+        for command in profile_commands:
+            actual = b' '.join(request((command + '\n').encode('ascii'))).decode('ascii').split()
+            if actual != expected_profile[command]:
+                raise RuntimeError(f'{command} differs from the backup. Restore the profile in Bazecor; Splash was not enabled by this command.')
+        print('Saved keymap, custom-layer mode, default layer, superkeys and macros match the backup.')
     if args.action in ('on', 'off'):
         request(b'splash2 1\n' if args.action == 'on' else b'splash2 0\n')
     response = request(b'splash2\n')

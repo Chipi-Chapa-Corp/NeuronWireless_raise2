@@ -10,6 +10,7 @@ it is not rebuilt from source.
 
 - [Build, install, enable and rollback](docs/splash-heatmap.md)
 - [Fade stepping: cause, renderer tests and limits](docs/fade-stepping.md)
+- [Changed key actions: missing profile after update](docs/input-profile-loss.md)
 - [Left LED freeze: evidence and notification fix](docs/left-led-freeze.md)
 - [Five repositories and pinned submodules](docs/repositories.md)
 - [Side patch source and exact metadata](side-patches/README.md)
