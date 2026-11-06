@@ -66,12 +66,12 @@ int main(int argc,char **argv) {
     shades.insert((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);
     if(ms) for(unsigned channel=0;channel<4;++channel) {
       int delta=static_cast<int>(rgb[channel])-previous_rgb[channel];
-      assert(delta>=-2 && delta<=2);
+      assert((delta>=-2 && delta<=2) || (rgb[0]==0 && rgb[1]==0 && previous_rgb[0]==0 && previous_rgb[1]==9));
     }
     memcpy(previous_rgb,rgb,4);
   }
-  assert(shades.size()>=30);
-  std::cout<<"Single-tap post-gamma RGB fade: "<<shades.size()<<" distinct displayed colors, <=2/255 channel change per 20 ms\n";
+  assert(shades.size()>=25);
+  std::cout<<"Single-tap post-gamma RGB fade: "<<shades.size()<<" distinct displayed colors, <=2/255 channel change per 20 ms except deliberate G9-to-black cutoff\n";
   assert(previous_rgb[0]==0 && previous_rgb[1]==0);
 
   // Repeated taps saturate the center, but its fade still has many RGB steps.
@@ -84,40 +84,48 @@ int main(int argc,char **argv) {
     hot_shades.insert((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);
     if(ms) for(unsigned c=0;c<4;++c) {
       int delta=static_cast<int>(rgb[c])-previous_rgb[c];
-      assert(delta>=-5 && delta<=5);
+      assert((delta>=-5 && delta<=5) || (rgb[0]==0 && rgb[1]==0 && previous_rgb[0]==0 && previous_rgb[1]==9));
     }
     memcpy(previous_rgb,rgb,4);
   }
   assert(hot_shades.size()>=160);
-  std::cout<<"Repeated-tap post-gamma fade: "<<hot_shades.size()<<" RGB colors, <=5/255 channel change per 20 ms\n";
+  std::cout<<"Repeated-tap post-gamma fade: "<<hot_shades.size()<<" RGB colors, <=5/255 channel change per 20 ms except deliberate G9-to-black cutoff\n";
 
   // Exercise a known 12/255 neighbor from the first tick of the tail.
-  // Opacity must follow a continuous quadratic ease-out, without shade holds.
+  // Opacity must follow a linear tail, without shade holds.
   heat.reset(0);heat.press(0,0,0);
-  static_assert(SplashHeatmap::tail_fade_ms==1000, "one-second ending");
-  unsigned previous_energy=12*256, previous_loss=1000;
-  for(unsigned tick=1;tick<=100;++tick) {
+  static_assert(SplashHeatmap::tail_fade_ms==500, "half-second linear ending");
+  unsigned previous_energy=12*256;
+  for(unsigned tick=1;tick<=50;++tick) {
     heat.tick(tick*10);
-    unsigned remaining=100-tick;
-    unsigned expected=12*256*remaining*remaining/10000;
+    unsigned remaining=50-tick;
+    unsigned expected=12*256*remaining/50;
     assert(heat.energy(0,2)==expected);
     unsigned loss=previous_energy-expected;
     if(expected) assert(loss>0); // Even between RGB quantization boundaries.
-    assert(loss<=previous_loss+1);
-    previous_energy=expected;previous_loss=loss;
+    assert(loss>=61 && loss<=62);
+    previous_energy=expected;
   }
   assert(heat.energy(0,2)==0);
-  heat.reset(0);heat.press(0,0,0);heat.tick(500);
-  assert(heat.energy(0,2)==3*256);
-  heat.press(0,0,500); // Reheat while already inside the low-energy tail.
-  assert(heat.energy(0,2)==15*256);
-  heat.tick(510);
-  assert(heat.energy(0,2)==15*256*99*99/10000);
+  heat.reset(0);heat.press(0,0,0);heat.tick(250);
+  assert(heat.energy(0,2)==6*256);
+  heat.press(0,0,250); // Reheat while already inside the low-energy tail.
+  assert(heat.energy(0,2)==18*256);
+  heat.tick(260);
+  assert(heat.energy(0,2)==18*256*65278/65536);
   heat.tick(1500);assert(heat.energy(0,2)==0);
   heat.reset(0);heat.press(1,1,0);heat.tick(4000);
   heat.press(1,1,4000);assert(heat.value(0,8)>=48);
   heat.tick(4200);assert(heat.value(0,8)>40);
-  std::cout<<"Continuous tail model: Q8 brightness changes every 10 ms along a 1000 ms quadratic ease-out; no shade holds\n";
+  std::cout<<"Linear tail model: Q8 brightness changes every 10 ms along a 500 ms linear fade; no shade holds\n";
+
+  for(unsigned level=0;level<=255;++level) {
+    uint8_t raw[4],actual[4];SplashHeatmap::color_energy(level*256,raw);post_gamma(raw,actual);
+    assert(!(actual[0]==0 && actual[1]>0 && actual[1]<=7));
+    if(level<=8) for(auto channel:actual) assert(channel==0);
+    if(level==9) assert(actual[0]==0 && actual[1]==9);
+  }
+  std::cout<<"Dark-tail cutoff: energies 0..8 black; no emitted G=1,3,4,6,7; first visible G=9\n";
 
   // Busy overlapping splashes still fit the shared per-half palette, without
   // out-of-range indices, heap allocation, or nondeterministic dither phases.

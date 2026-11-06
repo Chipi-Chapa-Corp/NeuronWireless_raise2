@@ -57,15 +57,15 @@ for scenario in range(3):
         for led in range(33):
             r, g, b, w = actual[led*4:led*4+4]
             if max(r, g) <= 7:
-                assert r == 0, (scenario, n, led, r, g)
+                assert r == 0 and g == 0, (scenario, n, led, r, g)
         assert not any(actual[33*4:])
     assert not any(actual)
     if scenario < 2:
-        assert len(colors) >= (30 if scenario == 0 else 160)
-        tail_holds = [runs[i+1][0] - time for i, (time, rgb) in enumerate(runs[:-1])
-                      if rgb[0] == 0 and 0 < rgb[1] <= 7]
-        assert len(tail_holds) == 5 and all(20 <= hold <= 300 for hold in tail_holds), tail_holds
-        assert 400 <= sum(tail_holds) <= 750 and tail_holds[-1] >= 150 and tail_holds[-1] > tail_holds[0], tail_holds
-        print(f'Actual RP2040 {"single-tap" if scenario == 0 else "saturated"} fade: {len(colors)} output colors; eased tail total {sum(tail_holds)} ms; last level {tail_holds[-1]} ms; final black')
+        assert len(colors) >= (25 if scenario == 0 else 155)
+        assert all(rgb[0]>0 or rgb[1]==0 or rgb[1]>7 for _,rgb in runs), runs
+        last_time,last_rgb=runs[-2]
+        last_hold=runs[-1][0]-last_time
+        assert last_rgb==(0,9,0,0) and 20<=last_hold<=80, (last_rgb,last_hold)
+        print(f'Actual RP2040 {"single-tap" if scenario == 0 else "saturated"} fade: {len(colors)} output colors; last green 9 for {last_hold} ms; no faint green; final black')
     else:
         print('Actual RP2040 overlapping-splash fade: every key matches post-gamma RGB, no brightness reversals or red tail, final black')

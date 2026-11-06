@@ -11,7 +11,7 @@
 class SplashHeatmap {
  public:
   enum { rows = 5, cols = 8, no_led = 255, max_leds = 36, frame_ms = 20,
-         tap_boost = 48, decay_ms = 10, tail_fade_ms = 1000 };
+         tap_boost = 48, decay_ms = 10, tail_fade_ms = 500, dark_energy_cutoff = 8 };
 
   void reset(uint32_t now) {
     memset(heat_, 0, sizeof(heat_));
@@ -32,15 +32,15 @@ class SplashHeatmap {
         if (steps >= 5000) { value = 0; tail_ticks = 0; tail_start = 0; continue; }
         for (uint32_t i = 0; i < steps && value; ++i) {
           if (value <= 16 * 256 + 127) {
-            // Continuous Q8 opacity: remove explicit shade holds. Squaring
-            // remaining time slows the brightness loss near the endpoint.
+            // Linear Q8 tail: do not stretch low-output plateaus near black.
+            // The color encoder suppresses the unwanted faint-green range.
             if (!tail_start) { tail_start = value; tail_ticks = 0; }
             const uint16_t ticks = tail_fade_ms / decay_ms;
             if (++tail_ticks >= ticks) {
               value = 0; tail_start = 0; tail_ticks = 0;
             } else {
               uint16_t remaining = ticks - tail_ticks;
-              value = static_cast<uint32_t>(tail_start) * remaining * remaining / (ticks * ticks);
+              value = static_cast<uint32_t>(tail_start) * remaining / ticks;
             }
           } else {
             // Retain the earlier exponential fade (about 1.757 s half-life).
@@ -124,6 +124,10 @@ class SplashHeatmap {
 
   static void color_energy(uint16_t heat, uint8_t *rgba) {
     uint16_t value = (static_cast<uint32_t>(heat) + 128) / 256;
+    // With the released gamma table, rounded energy 1..8 yields only
+    // G=1,3,4,6,7. Skip that unwanted faint-green phase, including grouped
+    // colors. Energy remains available for additive reheating.
+    if (value <= dark_energy_cutoff) { memset(rgba, 0, 4); return; }
     if (value > 255) value = 255;
     uint16_t r = value < 128 ? value * 2 : 255;
     uint16_t g = value < 128 ? 255 : 255 - (value - 128) * 2;

@@ -1,19 +1,24 @@
-# Raise 2 Splash/Heatmap — revision 13
+# Raise 2 Splash/Heatmap — revision 14
 
-This fork is based on the exact `Raise2_v1.5.0` release. Revision 13 removes
-explicit low-end shade holds. Each key's Q8 brightness now changes every 10 ms
-along a quadratic ease-out over approximately one second below 16/255 energy.
-The brightness loss becomes smaller toward black, instead of holding a shade
-then jumping to the next. New presses add heat and restart the affected tail.
-The earlier exponential fade, gamma/channel compensation and stable palette
-groups from previous revisions remain.
+This fork is based on the exact `Raise2_v1.5.0` release. Revision 14 replaces
+r13's one-second quadratic ending with a 500 ms linear Q8 tail, updated every
+10 ms below about 16/255 energy. It does not slow further near black.
 
-RGBW output is still quantized by the existing side-driver path. This change
-adds no static level below PWM 1; the final 1-to-0 step remains. The physical
-red tint is unresolved. The ordinary r13 package uses the same map-only side
-image as ordinary r12; the optional anti-ghost experiment remains separately
-selected. See [the fade investigation](fade-stepping.md) and
-[the driver limits/experiment](tail-driver-investigation.md).
+The final faint-green output levels 7, 6, 4, 3 and 1 are removed: rounded energy
+0..8 produces black. At full global brightness, the final lit green level is 9
+for 40 ms in the renderer replay (30 ms in the plugin's paced packet test),
+then off. This deliberately trades a larger final cutoff for no lingering dim
+green. A single-press center turns off at 2.92 s, compared with r13's 3.50 s;
+a saturated center turns off at 7.14 s, compared with 7.72 s.
+
+The cutoff also hides very faint outer rings until more heat accumulates.
+Fractional heat remains available for additive presses. Gamma compensation,
+the longer high-energy exponential decay and stable palette groups remain.
+The red tint's physical cause is unconfirmed: avoiding the reported phase is
+not proof of a hardware fix. The ordinary r14 package uses the same map-only
+side image as r13. The separate anti-ghost experiment is not included. See
+[the fade investigation](fade-stepping.md) and
+[the driver investigation](tail-driver-investigation.md).
 
 Revision 9's notification fixes are retained: forwarded wireless disconnects
 cannot erase a live wired route. Splash uses the normal scanner connection cache;
@@ -32,8 +37,8 @@ and regression tests](left-led-freeze.md).
   and so on in fractional precision. Diagonal neighbors are included. Splash
   stays within each half; thumb keys use an approximate lower visual row.
 - Energy decays every 10 ms with an approximately 1.757-second half-life above
-  about 16/255. Below that, brightness follows a continuous one-second quadratic
-  tail in Q8 precision. Integer RGB/PWM output can still repeat between changes.
+  about 16/255. Below that, energy follows a 500 ms linear tail in Q8 precision.
+  Rounded energies 0..8 are black, skipping the five faintest green outputs. Integer RGB/PWM output can still repeat between changes.
   Global brightness can merge physical levels; timing tests cover output before
   that final scaling.
 - Frames are capped at 50 fps. Each half gets an adaptive RGB palette with up to
@@ -88,11 +93,11 @@ The script runs input, animation, ownership, transport and side-instruction test
 then builds and verifies the installable package. Logs are in `build/verification`.
 Select this exact folder in Bazecor's custom firmware folder picker:
 
-    build/install/splash-heatmap-v1.5.0-r13
+    build/install/splash-heatmap-v1.5.0-r14
 
 It contains `Wireless_neuron.hex`, `keyscanner.bin`, `SHA256SUMS`, a manifest and
 this README. The Neuron is rebuilt from source. The side image is the SAME image
-as revisions 2 through 12; already patched halves do not require a different side
+as revisions 2 through 13; already patched halves do not require a different side
 image. Bazecor compares side application CRCs during its normal upgrade process.
 No automatic flashing is performed by the build scripts.
 

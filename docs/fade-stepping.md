@@ -1,4 +1,4 @@
-# Fade correction and a continuous ending: revision 13
+# Fade correction and trimmed dim-green ending: revision 14
 
 The user reported roughly one-second dim-color batches and a shallow red tail
 on a build preceding r9. Revision 9 changed notification handling only; it did
@@ -87,19 +87,34 @@ plateau and jump remain possible; this does not add lower physical PWM values.
 The native and released-renderer tests still require monotone
 cold fades, no brightness reversals and final black.
 
+## Revision 14: shorten the ending and skip faint green
+
+The user rejected the long plateaus and requested removal of the dark-green
+ending. The tail now uses `start_energy * remaining_time / duration`, with a
+500 ms duration and 10 ms updates. It no longer slows down near zero.
+Rounded energy 0..8 is encoded as black, which removes the released renderer's
+faint G=1,3,4,6,7 outputs. The cutoff is applied after group averaging too, so
+busy palette groups cannot reintroduce those values. Unrounded heat remains
+available for additive reheating; the high-energy decay is unchanged.
+
+This deliberately increases the last jump: G=9 goes directly to black. Very
+faint outer rings also remain dark until enough heat accumulates. It removes
+the animation phase the user associates with red; it does not establish the
+physical cause or guarantee that emitted red is gone.
+
 ## Verification and limits
 
-`tests/splash/color_transfer.py` executes the released ARM Layer renderer. It
-checks all 256 red/green inputs against the compensation oracle, then replays
-complete isolated, saturated and overlapping fades, comparing all 33 left-key
-outputs after gamma. The actual Neuron plugin's packet stream is separately
-checked using the oracle verified by that execution.
-
-The corrected isolated fade has **32 output colors** including black; the
-saturated model fade has **169**. Exact displayed holds now depend on the
-continuous curve crossing quantized output thresholds. There are no explicit
-shade holds, periodic refreshes or temporal dithering. Input/storage baseline
-checks and the notification regressions remain required.
+`tests/splash/color_transfer.py` executes the released ARM Layer renderer and
+checks every RGBW byte against the independently extracted gamma/gain oracle.
+The single-tap fade has 27 distinct outputs including black; the saturated
+model fade has 164. The renderer's final G=9 lasts 40 ms, then black, with none
+of the five removed faint-green outputs on any key, including overlapping
+splashes. A low green channel mixed with strong red is still allowed.
+The plugin's paced packet trace measures 30 ms at the final G=9.
+The model checks the linear envelope, additive reheating and all 256 rounded
+input energies. Monotone fades, no brightness reversals, routing, input and
+storage regressions remain required. The intentional G9-to-black transition
+is the sole exception to the prior small per-frame change bound.
 
 These results describe the output buffer before global brightness scaling.
 Lower global brightness reduces the physical PWM levels available, and real
@@ -115,12 +130,12 @@ must not be presented as a proven explanation for the red tail.
 The user also sees a reddish tint while Bazecor's pure white is steadily lit.
 That observation makes the shared color-conversion/LED path a candidate for
 investigation, but does not identify hardware, channel calibration or another
-specific cause. The final green levels (7, 6, 4, 3, 1) supply R=0, B=0 and W=0, and all channels
-reach zero at black in the renderer replay. No speculative global color-balance
-change is included in r13, and the reported physical tint remains unresolved.
+specific cause. In r13, the final green levels (7, 6, 4, 3, 1) supplied R=0, B=0 and W=0.
+Those faint levels are now skipped; all channels reach zero at black in the renderer replay. No speculative global color-balance
+change is included in r14, and the reported physical tint remains unresolved.
 
 Further tests now extend through the released PWM packer and output queue.
 A separately selected anti-ghost experiment changes one documented driver
-setting, while the ordinary r13 package retains the existing map-only side image. See
+setting, while the ordinary r14 package retains the existing map-only side image. See
 [the tail/driver investigation](tail-driver-investigation.md) for measured
 limits, exact patch details and the still-unconfirmed physical cause.

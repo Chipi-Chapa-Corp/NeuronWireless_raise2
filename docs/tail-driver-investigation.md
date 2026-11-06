@@ -27,6 +27,12 @@ same five dim levels: 540 ms in total, including 220 ms at PWM 1. It changes
 the fade envelope, not the minimum physical step; a perfectly smooth physical
 ending is not established by that change.
 
+Revision 14 subsequently shortens the tail to a 500 ms linear envelope and
+skips the faint G=1,3,4,6,7 outputs entirely. Its last lit output is G=9 for
+40 ms in the renderer replay, then black. This is an earlier animation cutoff,
+not new static PWM precision or proof that the physical red tint is fixed.
+The ordinary side image and the separate r12 anti-ghost experiment stay unchanged.
+
 ## Test beyond the renderer buffer
 
 `tests/splash/side_driver.py` extends the previous emulation through the released

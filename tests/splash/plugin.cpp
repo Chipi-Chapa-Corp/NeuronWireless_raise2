@@ -149,25 +149,23 @@ int main(int argc,char **argv) {
       assert(draw.time-previous_time>=SplashHeatmap::frame_ms);
       for(unsigned channel=0;channel<4;++channel) {
         int delta=static_cast<int>(draw.rgb[channel])-previous[channel];
-        assert(delta<=0 && delta>=-3); // Actual channel fade, without dither reversals.
+        assert(delta<=0 && (delta>=-3 || (draw.rgb[0]==0 && draw.rgb[1]==0 && previous[0]==0 && previous[1]==9))); // Actual channel fade, without dither reversals.
       }
     }
     memcpy(previous,draw.rgb,4);previous_time=draw.time;
   }
-  unsigned holds=0,total_hold=0,first_hold=0,last_hold=0;
+  unsigned last_hold=0,last_level=0;
   for(size_t i=0;i+1<color_runs.size();++i) {
-    if(color_runs[i].second>0 && color_runs[i].second<=7) {
-      unsigned duration=color_runs[i+1].first-color_runs[i].first;
-      assert(duration>=20 && duration<=300);
-      if(!holds) first_hold=duration;
-      last_hold=duration;total_hold+=duration;++holds;
+    assert(color_runs[i].second==0 || color_runs[i].second>7);
+    if(color_runs[i+1].second==0) {
+      last_level=color_runs[i].second;
+      last_hold=color_runs[i+1].first-color_runs[i].first;
     }
   }
-  assert(holds==5);
-  assert(total_hold>=400 && total_hold<=750 && last_hold>=150 && last_hold>first_hold);
-  std::cout<<"Actual plugin eased-tail packet timing: final five green levels total "<<total_hold<<" ms; last level "<<last_hold<<" ms; final black\n";
-  assert(colors.size()>=30);
-  std::cout<<"Actual plugin post-gamma RGB trace: "<<colors.size()<<" distinct single-tap colors, monotone fade, <=3/255 channel steps\n";
+  assert(last_level==9 && last_hold>=20 && last_hold<=80);
+  std::cout<<"Actual plugin trimmed-tail packet timing: last green level "<<last_level<<"; last level "<<last_hold<<" ms; no faint green; final black\n";
+  assert(colors.size()>=25);
+  std::cout<<"Actual plugin post-gamma RGB trace: "<<colors.size()<<" distinct single-tap colors, monotone fade, <=3/255 channel steps except G9-to-black cutoff\n";
 
   // Exercise the reported repeated-same-key case through the actual sender,
   // after all earlier snapshots have completed.
@@ -183,12 +181,12 @@ int main(int argc,char **argv) {
     hot_colors.insert((draw.rgb[0]<<16)|(draw.rgb[1]<<8)|draw.rgb[2]);
     if(previous_time) for(unsigned c=0;c<4;++c) {
       int delta=static_cast<int>(draw.rgb[c])-previous[c];
-      assert(delta>=-7 && delta<=7);
+      assert((delta>=-7 && delta<=7) || (draw.rgb[0]==0 && draw.rgb[1]==0 && previous[0]==0 && previous[1]==9));
     }
     memcpy(previous,draw.rgb,4);previous_time=draw.time;
   }
   assert(hot_colors.size()>=150);
-  std::cout<<"Actual repeated-tap post-gamma RGB trace: "<<hot_colors.size()<<" colors, <=7/255 channel steps\n";
+  std::cout<<"Actual repeated-tap post-gamma RGB trace: "<<hot_colors.size()<<" colors, <=7/255 channel steps except G9-to-black cutoff\n";
 
   Packet connected{};connected.header.command=CONNECTED;connected.header.device=KEYSCANNER_DEFY_LEFT;
   Communications.callbacks.call(CONNECTED,connected);before=Communications.packets.size();
