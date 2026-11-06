@@ -1,0 +1,67 @@
+# Fade stepping: revision 10
+
+The user reported roughly one-second dim-color batches and a shallow red tail
+on a build preceding r9. Revision 9 changed notification handling only; it did
+not change the animation. The following reproduction and fix concern fading.
+
+## What the old tests missed
+
+The previous tests counted RGB values in the received palette and checked packet
+order. The side Layer renderer applies a gamma table and channel gains before
+writing its LED output buffer. Many distinct palette colors collapse to the same
+output. Checking only palette bytes substantially overstated visible smoothness.
+
+Running the exact released instructions on an isolated tap gives this sequence
+for the pressed key in revisions 5–9, before global brightness scaling:
+
+| Time | Post-gamma RGBA output |
+| --- | --- |
+| 0 ms | (0, 3, 0, 0) |
+| 440 ms | (0, 1, 0, 0) |
+| 1400 ms | (0, 0, 0, 0) |
+
+The dim green holds for **960 ms**. For a saturated key there are 124 distinct
+output colors, with a final 980 ms green hold before black. Sending more frequent
+packets cannot fix quantization inside this conversion.
+
+## Source-only correction
+
+The Neuron maps desired linear red/green values through the inverse of the exact
+released transfer. `src/SplashColor.h` contains two small, generated lookup tables.
+`tools/generate-splash-color.py` accepts only the SHA-verified official 1.5.0 side
+image, reads the gamma LUT at `0x100267a4` and the R/G float32 gains at
+`0x10012f68` / `0x10012f60`, then selects the closest realizable output. Black maps
+to zero. The build verifies the generated header; it never modifies the side.
+
+At ordinary energy the existing decay law is unchanged. The minimum decrement
+is now 16 Q8 units per 10 ms: below about 16/255, decay becomes linear instead of
+holding the final quantized levels for a long exponential tail. Tap energy,
+splash rings, frame pacing and the user's brightness configuration stay the same.
+This makes low-energy taps brighter: their brightness is no longer unintentionally
+crushed by another gamma conversion.
+
+## Verification and limits
+
+`tests/splash/color_transfer.py` executes the released ARM Layer renderer. It
+checks all 256 red/green inputs against the compensation oracle, then replays
+complete isolated, saturated and overlapping fades, comparing all 33 left-key
+outputs after gamma. The actual Neuron plugin's packet stream is separately
+checked using the oracle verified by that execution.
+
+The corrected isolated fade has **32 output colors** including black; the
+saturated fade has **169**. The dim tail's unchanged-color holds are at most
+**320 ms** at this stage. Single taps reach black at about 5.2 seconds and
+saturated keys at about 9.4 seconds. There are no new periodic refreshes,
+diagnostics, temporal dithering or side instruction patches. Input and storage
+baseline checks and r9's notification regressions remain required.
+
+These results describe the output buffer before global brightness scaling.
+Lower global brightness reduces the physical PWM levels available, and real
+LEDs cannot show infinitely small brightness steps. This change has not yet
+been observed on the physical keyboard.
+
+The reported red tail was not reproduced by the old isolated fade: it went green
+to black. The corrected isolated, saturated and overlapping renderer tests also
+show no nearly-black red tail, but this does not establish the cause of the
+physical report. Hardware confirmation is still needed; the gamma result alone
+must not be presented as a proven explanation for the red tail.

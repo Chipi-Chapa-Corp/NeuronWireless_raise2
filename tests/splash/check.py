@@ -134,13 +134,20 @@ int main() {
   std::cout<<"Actual v1.5.0 Hand decoder and matrix scan: all 80 positions passed\n";
 }
 '''
+color_spec = importlib.util.spec_from_file_location('splash_color', root / 'tools/generate-splash-color.py')
+color_tool = importlib.util.module_from_spec(color_spec)
+color_spec.loader.exec_module(color_tool)
+assert (root / 'src/SplashColor.h').read_text() == color_tool.generated_header()
 with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     temp = Path(temp)
+    (temp / 'actual_color_transfer.inc').write_text('\n'.join(
+        'static const uint8_t ' + name + '_transfer[256] = {' + ','.join(map(str, table)) + '};'
+        for name, table in zip(('red', 'green'), color_tool.transfer_tables())))
     test = temp / 'decoder.cpp'
     test.write_text(prefix + scan_function + suffix)
     flags = ['g++', '-std=c++11', '-fsanitize=address,undefined', '-g',
              '-Wno-c++17-extensions', '-DARDUINO_ARCH_NRF52', '-DKEYBOARDMANAGER_H',
-             '-I' + str(root / 'tests/splash/stubs'),
+             '-I' + str(root / 'tests/splash/stubs'), '-I' + str(temp),
              '-I' + str(scanner / 'universalModules'),
              '-I' + str(scanner),
              '-I' + str(root / 'libraries/Communications/src')]
@@ -148,9 +155,10 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
                              '-o', str(temp / 'decoder')], check=True)
     subprocess.run([str(temp / 'decoder')], check=True)
     subprocess.run(['g++', '-std=c++11', '-Wall', '-Wextra', '-fsanitize=address,undefined',
-                    '-I' + str(root / 'src'), '-I' + str(root / 'libraries/Communications/src'),
+                    '-I' + str(root / 'src'), '-I' + str(temp), '-I' + str(root / 'libraries/Communications/src'),
                     str(root / 'tests/splash/model.cpp'), '-o', str(temp / 'model')], check=True)
-    subprocess.run([str(temp / 'model')], check=True)
+    fade_trace = temp / 'fade.bin'
+    subprocess.run([str(temp / 'model'), str(fade_trace)], check=True)
     subprocess.run(flags + ['-include', str(root / 'tests/splash/stubs/host.h'),
                     '-I' + str(root / 'src'),
                     '-I' + str(root / 'libraries/NeuronLedLibrary/LedModeSerializable/src'),
@@ -175,7 +183,7 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     begin = crc_source.index('static constexpr uint8_t crc_table')
     end = crc_source.index('\nuint32_t crc32(', begin)
     (temp / 'actual_crc8.inc').write_text(crc_source[begin:end])
-    subprocess.run(base_flags + ['-I' + str(root / 'tests/splash/stubs'),
+    subprocess.run(base_flags + ['-I' + str(root / 'tests/splash/stubs'), '-I' + str(temp),
         '-I' + str(common), '-I' + str(communication), '-I' + str(temp),
         str(root / 'tests/splash/route_state.cpp'), str(common / 'Communications_side.cpp'),
         str(common / 'Communication_model.cpp'), '-o', str(temp / 'route_state')], check=True)
@@ -190,7 +198,7 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     def expect_regression(common_source, label, expected_assertion):
         binary = temp / 'route_state_old'
-        subprocess.run(base_flags + ['-I' + str(root / 'tests/splash/stubs'),
+        subprocess.run(base_flags + ['-I' + str(root / 'tests/splash/stubs'), '-I' + str(temp),
             '-I' + str(common), '-I' + str(communication), '-I' + str(temp),
             str(root / 'tests/splash/route_state.cpp'), str(common_source),
             str(common / 'Communication_model.cpp'), '-o', str(binary)], check=True)
@@ -234,6 +242,7 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
         patched = side.patcher.patch(stock)
         side.check(stock, patched)
         subprocess.run([__import__('sys').executable, str(root / 'tests/splash/side_scheduler.py')], check=True)
+        subprocess.run([__import__('sys').executable, str(root / 'tests/splash/color_transfer.py'), str(fade_trace)], check=True)
         receivers = [side.Receiver(patched), side.Receiver(patched)]
         packets = trace.read_bytes()
         colors = [set(), set()]

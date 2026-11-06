@@ -1,15 +1,18 @@
-# Raise 2 Splash/Heatmap — revision 9
+# Raise 2 Splash/Heatmap — revision 10
 
-This fork is based on the exact `Raise2_v1.5.0` release. Revision 9 fixes the
-notification handling that can erase a live wired route after a wireless
-disconnect. The wired receiver suppresses a forwarded disconnect naming its own
-still-connected wired peer. BLE disconnect callbacks clear the SPI cache slot
-only when that slot actually contains the BLE route. Genuine transport losses
-still clear their routes through the local connection state machine.
+This fork is based on the exact `Raise2_v1.5.0` release. Revision 10 compensates
+for the side Layer renderer's gamma table and unequal red/green gains, so small
+energy changes survive its conversion. It keeps the long exponential fade at
+normal energy and uses a linear near-black tail. A single tap now exercises 32
+output colors instead of three including black; the final dim hold drops from
+about 960 ms to at most 320 ms before the user's global brightness scaling.
+Low-energy taps and their neighboring keys are brighter than previous builds.
+See [the fade investigation and limits](fade-stepping.md).
 
-Splash uses the normal scanner connection cache again; revision 8's active-route
-bypass and its APIs have been removed. Revision 5's animation is retained without
-diagnostic counters or periodic refresh. The side binary is unchanged.
+Revision 9's notification fixes are retained: forwarded wireless disconnects
+cannot erase a live wired route. Splash uses the normal scanner connection cache;
+revision 8's bypass APIs remain removed. There are no diagnostic counters,
+periodic refreshes, temporal dithering, or additional side binary changes.
 
 The new Neuron image has passed software checks but has not been tested on the
 physical keyboard. Existing r5 status was read while the real fault was present;
@@ -22,8 +25,10 @@ and regression tests](left-led-freeze.md).
 - Neighbor rings receive half the preceding ring's energy: 24, 12, 6, 3, 1.5,
   and so on in fractional precision. Diagonal neighbors are included. Splash
   stays within each half; thumb keys use an approximate lower visual row.
-- Energy decays every 10 ms with an approximately 1.757-second half-life. A single
-  tap remains visible for about 10 seconds; a saturated key for about 14 seconds.
+- Energy decays every 10 ms with an approximately 1.757-second half-life above
+  16/255. Below that it loses at least 1/16 energy per tick, avoiding a long
+  near-black plateau. Before global brightness scaling, a single tap reaches
+  black at about 5.2 seconds and a saturated key at about 9.4 seconds.
 - Frames are capped at 50 fps. Each half gets an adaptive RGB palette with up to
   15 nonblack colors. An isolated splash fits exactly; busy overlapping splashes
   may merge nearby energy levels. Temporal dithering is not used.
@@ -75,11 +80,11 @@ The script runs input, animation, ownership, transport and side-instruction test
 then builds and verifies the installable package. Logs are in `build/verification`.
 Select this exact folder in Bazecor's custom firmware folder picker:
 
-    build/install/splash-heatmap-v1.5.0-r9
+    build/install/splash-heatmap-v1.5.0-r10
 
 It contains `Wireless_neuron.hex`, `keyscanner.bin`, `SHA256SUMS`, a manifest and
 this README. The Neuron is rebuilt from source. The side image is the SAME image
-as revisions 2 through 8; already patched halves do not require a different side
+as revisions 2 through 9; already patched halves do not require a different side
 image. Bazecor compares side application CRCs during its normal upgrade process.
 No automatic flashing is performed by the build scripts.
 
@@ -134,6 +139,10 @@ The release RP2040 map handlers execute 10,000 updates in Unicorn without vector
 growth. Its palette handler and mode setter receive the actual Neuron packet
 trace. A separate test executes the real side timers, scheduler and Layer renderer
 with hardware clock, power, float ROM helpers and physical driver substituted.
+All 256 R/G inputs verify the compensation oracle against the actual Layer
+renderer. Isolated, saturated and overlapping fades replay through that renderer
+and compare all keys' post-gamma output with the expected values. Global
+brightness scaling and physical PWM/LED behavior remain hardware limits.
 
 The package verifies exact RF-host merging, flash ranges, vector table, input and
 output side hashes, declared patch-byte boundaries and pinned source revisions.

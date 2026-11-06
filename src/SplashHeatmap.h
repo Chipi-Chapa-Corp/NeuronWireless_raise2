@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "Communications_protocol.h"
+#include "SplashColor.h"
 
 class SplashHeatmap {
  public:
@@ -26,8 +27,14 @@ class SplashHeatmap {
         // (251/256)^(1/5), rounded to Q16: five times slower than r4,
         // with the same 10 ms time resolution rather than larger fade steps.
         if (steps >= 5000) value = 0;
-        else for (uint32_t i = 0; i < steps && value; ++i)
-          value = static_cast<uint32_t>(value) * 65278 / 65536;
+        else for (uint32_t i = 0; i < steps && value; ++i) {
+          uint16_t next = static_cast<uint32_t>(value) * 65278 / 65536;
+          // Keep the long exponential fade at normal energy, then use a
+          // linear tail below ~16/255. Last RGB levels must not linger a second.
+          uint16_t loss = value - next;
+          if (loss < 16) loss = 16;  // Q8: one target unit per 160 ms.
+          value = value > loss ? value - loss : 0;
+        }
       }
     last_decay_ += steps * decay_ms;
   }
@@ -102,8 +109,10 @@ class SplashHeatmap {
     if (value > 255) value = 255;
     uint16_t r = value < 128 ? value * 2 : 255;
     uint16_t g = value < 128 ? 255 : 255 - (value - 128) * 2;
-    rgba[0] = r * value / 255;
-    rgba[1] = g * value / 255;
+    // The side's Layer renderer applies gamma and unequal R/G gains. Sending
+    // linear low RGB directly collapses a single tap into just two lit levels.
+    rgba[0] = SplashColor::red[r * value / 255];
+    rgba[1] = SplashColor::green[g * value / 255];
     rgba[2] = rgba[3] = 0;
   }
 

@@ -5,6 +5,7 @@
 #include <set>
 #include <vector>
 #include "SplashHeatmapPlugin.h"
+#include "color_reference.h"
 #include "Communications.h"
 #include "Colormap-Defy.h"
 #include "LED-Palette-Theme-Defy.h"
@@ -35,7 +36,7 @@ struct Display {
       uint32_t id;memcpy(&id,p.data,4);
       if(id==CRC32_STR("LedModeSerializable_Layer")) {
         assert(p.data[8]==0 && p.data[9]==0);
-        for(unsigned i=0;i<36;++i) memcpy(rgb[i],palette[maps[p.data[8]][i]],4);
+        for(unsigned i=0;i<36;++i) post_gamma(palette[maps[p.data[8]][i]],rgb[i]);
       } else if(id==CRC32_STR("LedModeSerializable_SolidColor")) {
         for(auto &color:rgb) memcpy(color,p.data+8,4);
       }
@@ -123,8 +124,10 @@ int main(int argc,char **argv) {
   before=Communications.packets.size();Communications.reject=true;
   step(40);assert(Communications.packets.size()==before);
   Communications.reject=false;step(5);
-  assert(displays[0].rgb[8][0]==18 && displays[0].rgb[8][1]==48);
-  assert(displays[0].rgb[1][1]==24 && displays[0].rgb[3][1]==12);
+  assert(displays[0].rgb[8][0]>=17 && displays[0].rgb[8][0]<=19);
+  assert(displays[0].rgb[8][1]>=47 && displays[0].rgb[8][1]<=49);
+  assert(displays[0].rgb[1][1]>=23 && displays[0].rgb[1][1]<=25);
+  assert(displays[0].rgb[3][1]>=11 && displays[0].rgb[3][1]<=13);
   // Held snapshots cannot add heat, and the final black frame is redrawn.
   for(unsigned i=0;i<12500;++i) {Communications.callbacks.call(HAS_KEYS,key);step();}
   for(const auto &color:displays[0].rgb) for(auto channel:color) assert(channel==0);
@@ -148,8 +151,8 @@ int main(int argc,char **argv) {
     }
     memcpy(previous,draw.rgb,4);previous_time=draw.time;
   }
-  assert(colors.size()>=35);
-  std::cout<<"Actual plugin RGB wire trace: "<<colors.size()<<" distinct single-tap colors, monotone fade, <=3/255 channel steps\n";
+  assert(colors.size()>=30);
+  std::cout<<"Actual plugin post-gamma RGB trace: "<<colors.size()<<" distinct single-tap colors, monotone fade, <=3/255 channel steps\n";
 
   // Exercise the reported repeated-same-key case through the actual sender,
   // after all earlier snapshots have completed.
@@ -169,8 +172,8 @@ int main(int argc,char **argv) {
     }
     memcpy(previous,draw.rgb,4);previous_time=draw.time;
   }
-  assert(hot_colors.size()>=190);
-  std::cout<<"Actual repeated-tap RGB wire trace: "<<hot_colors.size()<<" colors, <=7/255 channel steps\n";
+  assert(hot_colors.size()>=150);
+  std::cout<<"Actual repeated-tap post-gamma RGB trace: "<<hot_colors.size()<<" colors, <=7/255 channel steps\n";
 
   Packet connected{};connected.header.command=CONNECTED;connected.header.device=KEYSCANNER_DEFY_LEFT;
   Communications.callbacks.call(CONNECTED,connected);before=Communications.packets.size();
