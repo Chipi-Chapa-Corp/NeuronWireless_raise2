@@ -93,6 +93,6 @@ must not be presented as a proven explanation for the red tail.
 The user also sees a reddish tint while Bazecor's pure white is steadily lit.
 That observation makes the shared color-conversion/LED path a candidate for
 investigation, but does not identify hardware, channel calibration or another
-specific cause. The dim Splash tail supplies R=0, B=0 and W=0, and all channels
+specific cause. The final green levels (7, 6, 4, 3, 1) supply R=0, B=0 and W=0, and all channels
 reach zero at black in the renderer replay. No speculative global color-balance
 change is included in r12, and the reported physical tint remains unresolved.
