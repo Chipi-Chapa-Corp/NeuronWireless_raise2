@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstring>
 #include <deque>
+#include <fstream>
 #include <iostream>
 #include "Communications.h"
 #include "Communications_side.h"
@@ -20,6 +21,7 @@ void KeyboardHands::setup() {
 }
 struct KeyboardKeyScanner { static Devices leftHandDevice(); };
 #include "actual_connection_getter.inc"
+#include "actual_crc8.inc"
 
 struct Port {
   bool connected=true;
@@ -38,7 +40,7 @@ struct Port {
   static Devices route(void *self) { return static_cast<Port*>(self)->device; }
 };
 
-int main() {
+int main(int argc,char **argv) {
   KeyboardHands::setup();
   Port port;
   const ComModel::com_model_if_t interface={Port::event,Port::send,Port::read,Port::alive,Port::disconnect,Port::route};
@@ -57,6 +59,13 @@ int main() {
   // without changing the underlying connected ComSide. Reproduce this state;
   // this does not claim which notification occurred on the physical keyboard.
   Packet notice=connected;notice.header.command=DISCONNECTED;
+  if(argc>1) {
+    std::ifstream stream(argv[1],std::ios::binary);
+    assert(stream.read(reinterpret_cast<char*>(notice.buf),sizeof(notice)));
+    assert(notice.header.command==DISCONNECTED && notice.header.device==KEYSCANNER_DEFY_LEFT);
+    auto checksum=notice.header.crc;notice.header.crc=0;
+    assert(crc8(notice.buf,sizeof(Header)+notice.header.size)==checksum);
+  }
   port.incoming.push_back(notice);side.run();
   assert(KeyboardKeyScanner::leftHandDevice()==UNKNOWN);
   assert(side.is_connected() && side.connectedDevice()==KEYSCANNER_DEFY_LEFT);
@@ -72,4 +81,5 @@ int main() {
   side.run();side.run();
   assert(side.connectedDevice()==UNKNOWN && side.is_disconnected());
   std::cout<<"Actual ComSide + stock connection callbacks: UNKNOWN scanner route with live key input reproduced; active transport getter remains correct\n";
+  if(argc>1) std::cout<<"Released side radio event -> valid wired disconnect packet -> real Neuron cache invalidation -> continuing key input: end-to-end software reproduction passed\n";
 }

@@ -46,7 +46,71 @@ executes that allowed sequence through the real ComSide/ComModel code and stock
 connection callbacks: the scanner route becomes UNKNOWN, then ten HAS_KEYS
 packets still arrive. This reproduces the cache/transport disagreement. It is
 not evidence that this exact packet sequence triggered the physical incident;
-there was no event trace before the failure.
+there was no event trace before the failure. The next section establishes that
+the released side firmware can generate this packet during a radio disconnect.
+
+## Where the false wired disconnect comes from
+
+Further instruction emulation reproduces this sequence in the released 1.5.0
+side application itself:
+
+1. The secondary radio peer disconnects while the wired link remains connected.
+2. The radio-disconnect routine dispatches DISCONNECTED through the side's shared
+   application callbacks. Its original packet identifies BLE-left (9) or
+   BLE-right (10).
+3. The callback registered by wired initialization forwards that notification
+   through the normal Communications sender while wired is up and radio is down.
+4. The wired sender overwrites the source device with wired-left (1) or wired-right
+   (2), computes a valid CRC8 and queues the packet. It retains the wired-connected
+   flag throughout.
+5. The Neuron delivers the packet to its stock disconnect callbacks. They clear
+   the wired cache entry while the real wired ComSide still receives keys.
+
+This is a transport-identity error: a secondary wireless-link notification is
+turned into a wired-half disconnect. A wired reconnect is not implied by the
+radio event, so there need not be a fresh wired CONNECTED callback to repair the
+cache. The left and right paths reproduce independently; a left event leaves
+the right cache intact.
+
+For review, these are application execution addresses in the exact released
+binary, using the existing file-to-execution bias of 0x10005000:
+
+| Released code/data | Address |
+| --- | --- |
+| Radio event handler; event 0x0F selects disconnect | 0x1001A4E8 |
+| Radio disconnect routine, notify enabled | 0x1001A418 |
+| Wired initialization installs the DISCONNECTED callback | 0x1001B65E–0x1001B710 |
+| Forwarding callback | 0x1001AE9C |
+| Communications sender | 0x10015B54 |
+| Wired sender that rewrites the device and computes CRC8 | 0x1001B508 |
+| Wired / radio established flags | 0x2000B723 / 0x2000B71C |
+
+`tests/splash/side_disconnect.py` executes that event handler, callback and sender
+chain, substituting only hardware radio stop, scheduler yield, libc memory copy,
+display effect and final queue insertion. The callback table uses the layout and
+function entry installed by the released initializer. It verifies these exact
+32-byte packets (remaining bytes are zero):
+
+- Left: `03 01 00 51 ...` — DISCONNECTED, wired-left, no payload, valid CRC8.
+- Right: `03 02 00 ec ...` — DISCONNECTED, wired-right, no payload, valid CRC8.
+
+The generated left packet is then fed through the real Neuron ComSide and stock
+cache callbacks. The host test checks its CRC using the actual Neuron CRC8 code,
+observes the cache become UNKNOWN, and delivers ten subsequent key packets on
+the same still-connected transport.
+
+Both the untouched official side image and our map-patched image produce exactly
+the same packets. None of the map patch's instruction windows is involved. This
+mechanism is in the released application, rather than introduced by our two map
+allocation changes. No new firmware patch or runtime diagnostics were added for
+this investigation.
+
+**Evidence limit:** this establishes and tests a specific upstream mechanism
+that produces the captured state. It does not retrospectively prove that event
+0x0F occurred immediately before the user's incident, nor explain what caused
+the secondary wireless connection to drop. That last attribution would require
+a connection-event capture spanning a recurrence. The r5 snapshots contained
+current state and counters, not a historical event log.
 
 ## Revision 8
 

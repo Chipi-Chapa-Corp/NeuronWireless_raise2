@@ -164,11 +164,20 @@ with tempfile.TemporaryDirectory(prefix='raise2-release-tests-') as temp:
     end = source.index('\nCommunications_protocol::Devices KeyboardKeyScanner::rightHandDevice(', begin)
     (temp / 'actual_connection_getter.inc').write_text(source[begin:end])
     common = communication / 'device/neuron/common'
+    crc_source = (root / 'libraries/CRC/CRC_wrapper.cpp').read_text()
+    begin = crc_source.index('static constexpr uint8_t crc_table')
+    end = crc_source.index('\nuint32_t crc32(', begin)
+    (temp / 'actual_crc8.inc').write_text(crc_source[begin:end])
     subprocess.run(base_flags + ['-I' + str(root / 'tests/splash/stubs'),
         '-I' + str(common), '-I' + str(communication), '-I' + str(temp),
         str(root / 'tests/splash/route_state.cpp'), str(common / 'Communications_side.cpp'),
         str(common / 'Communication_model.cpp'), '-o', str(temp / 'route_state')], check=True)
     subprocess.run([str(temp / 'route_state')], check=True)
+    if importlib.util.find_spec('unicorn'):
+        disconnect_packets = temp / 'released-disconnects.bin'
+        subprocess.run([__import__('sys').executable, str(root / 'tests/splash/side_disconnect.py'),
+                        str(disconnect_packets)], check=True)
+        subprocess.run([str(temp / 'route_state'), str(disconnect_packets)], check=True)
     subprocess.run(base_flags + ['-I' + str(communication), '-I' + str(temp),
         str(root / 'tests/splash/transport.cpp'), '-o', str(temp / 'transport')], check=True)
     subprocess.run([str(temp / 'transport')], check=True)
