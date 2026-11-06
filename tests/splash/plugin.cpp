@@ -241,11 +241,16 @@ int main(int argc,char **argv) {
   // A blocked half must neither freeze its peer nor replay an ancient bright
   // snapshot once transport returns. Exercise behavior without counters.
   Communications.reject_device=KEYSCANNER_DEFY_LEFT;
-  key.data[1]=0;Communications.callbacks.call(HAS_KEYS,key);
-  key.data[1]=2;Communications.callbacks.call(HAS_KEYS,key);
+  // Heat enough for the new 800 ms single-tap duration so the 1500 ms
+  // stall still exercises stale-pending-frame expiry while LEDs remain lit.
   Packet right_key=key;right_key.header.device=KEYSCANNER_DEFY_RIGHT;
-  Communications.callbacks.call(HAS_KEYS,right_key);
-  before=Communications.packets.size();step(350);
+  for(unsigned tap=0;tap<3;++tap) {
+    key.data[1]=0;right_key.data[1]=0;
+    Communications.callbacks.call(HAS_KEYS,key);Communications.callbacks.call(HAS_KEYS,right_key);
+    key.data[1]=2;right_key.data[1]=2;
+    Communications.callbacks.call(HAS_KEYS,key);Communications.callbacks.call(HAS_KEYS,right_key);
+  }
+  before=Communications.packets.size();step(1500);
   unsigned peer_frames=0;
   for(size_t n=before;n<Communications.packets.size();++n) {
     const auto &p=Communications.packets[n];
@@ -254,7 +259,9 @@ int main(int argc,char **argv) {
   }
   assert(peer_frames>0);
   Communications.reject_device=UNKNOWN;step(10);
-  assert(displays[0].rgb[8][0]==0 && displays[0].rgb[8][1]==0 && displays[0].rgb[8][2]>0 && displays[0].rgb[8][2]<52);
+  // The original 96-heat snapshot had green and full blue. Recovery must
+  // instead show a cooler blue-only frame after the stale snapshot expired.
+  assert(displays[0].rgb[8][0]==0 && displays[0].rgb[8][1]==0 && displays[0].rgb[8][2]>0 && displays[0].rgb[8][2]<138);
 
   unsigned last_map=0,maps=0,last_mode[2]{};
   for(unsigned ms=0;ms<300;++ms) {
